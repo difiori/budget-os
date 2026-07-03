@@ -6,8 +6,7 @@ import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
-import { agruparParcelas, parcelasFuturas } from "@/lib/domain/parcelas-futuras";
-import { labelMes } from "@/lib/format/meses";
+import { labelMes, MESES } from "@/lib/format/meses";
 import { CartoesList, type CartaoView } from "./cartoes-list";
 import type { Cartao, Categoria, Pessoa, Saida } from "@/lib/domain/types";
 
@@ -56,34 +55,50 @@ export default async function CartoesPage({
 
   const todosCartoes = (cartoes ?? []) as Cartao[];
   const todasSaidas = (saidas ?? []) as Saida[];
-  const grupos = agruparParcelas(todasSaidas);
   const contaPorId = new Map(((contas ?? []) as { id: string; nome: string }[]).map((c) => [c.id, c.nome]));
   const categoriaPorId = new Map(((categorias ?? []) as Categoria[]).map((c) => [c.id, c.nome]));
+
+  const categoriaNomePorId = Object.fromEntries(categoriaPorId);
+  const ordenarPorData = (a: Saida, b: Saida) => ((a.data ?? a.created_at) < (b.data ?? b.created_at) ? 1 : -1);
+  const dd = (dia: number) => String(dia).padStart(2, "0");
 
   const views: CartaoView[] = todosCartoes.map((cartao) => {
     const saidasCartao = todasSaidas.filter((s) => s.cartao_id === cartao.id);
     const comprometido = limiteComprometidoCents(cartao.id, saidasCartao);
-    const compras = saidasCartao
+
+    // Fatura "a vencer": compras do mês anterior — fecharam e vencem agora.
+    const comprasAVencer = saidasCartao
+      .filter((s) => isSameMonth(dataParaCalculo(s), mesAnterior))
+      .sort(ordenarPorData);
+    // Fatura "do mês": compras do mês em foco — vencem no mês seguinte.
+    const comprasDoMes = saidasCartao
       .filter((s) => isSameMonth(dataParaCalculo(s), mesReferencia))
-      .sort((a, b) => ((a.data ?? a.created_at) < (b.data ?? b.created_at) ? 1 : -1));
-    const futuras = grupos
-      .filter((g) => g.cartaoId === cartao.id)
-      .flatMap((g) => parcelasFuturas(g, mesReferencia).map((p) => ({ ...p, nomeBase: g.nomeBase })));
+      .sort(ordenarPorData);
+
+    const pendentesAVencer = comprasAVencer.filter((s) => s.status !== "Pago");
 
     return {
       cartao,
-      faturaAtual: faturaAtualCents(cartao.id, saidasCartao, mesReferencia),
       comprometido,
       disponivel: limiteDisponivelCents(cartao.limite_cents, comprometido),
       contaVinculadaNome: cartao.conta_vinculada_id ? contaPorId.get(cartao.conta_vinculada_id) ?? null : null,
-      compras,
-      parcelasFuturas: futuras.map((f) => ({
-        id: f.id,
-        nomeBase: f.nomeBase,
-        parcela: f.parcela,
-        totalCents: f.total_cents,
-      })),
-      categoriaNomePorId: Object.fromEntries(categoriaPorId),
+      aVencer: {
+        titulo: `Fatura de ${MESES[mesAnterior.month - 1]}`,
+        vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesReferencia.month)}`,
+        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesAnterior),
+        compras: comprasAVencer,
+        temPendente: pendentesAVencer.length > 0,
+        totalPendenteCents: pendentesAVencer.reduce((sum, s) => sum + s.total_cents, 0),
+        cicloAno: mesAnterior.year,
+        cicloMes: mesAnterior.month,
+      },
+      doMes: {
+        titulo: `Fatura de ${MESES[mesReferencia.month - 1]}`,
+        vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesSeguinte.month)}`,
+        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia),
+        compras: comprasDoMes,
+      },
+      categoriaNomePorId,
     };
   });
 

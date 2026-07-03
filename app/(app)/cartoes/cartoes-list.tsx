@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Check, CheckCheck, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
@@ -13,18 +13,32 @@ import { inputClasses } from "@/components/ui/field";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { atualizarSaida, excluirSaida } from "../lancamentos/actions";
+import { marcarFaturaComoPaga } from "./actions";
 import type { Cartao, Categoria, Saida, SaidaStatus } from "@/lib/domain/types";
 
 const STATUS_SAIDA: SaidaStatus[] = ["A pagar", "Pago"];
 
+interface FaturaView {
+  titulo: string;
+  vencimentoLabel: string;
+  totalCents: number;
+  compras: Saida[];
+}
+
+interface FaturaAVencer extends FaturaView {
+  temPendente: boolean;
+  totalPendenteCents: number;
+  cicloAno: number;
+  cicloMes: number;
+}
+
 export interface CartaoView {
   cartao: Cartao;
-  faturaAtual: number;
   comprometido: number;
   disponivel: number | null;
   contaVinculadaNome: string | null;
-  compras: Saida[];
-  parcelasFuturas: { id: string; nomeBase: string; parcela: string | null; totalCents: number }[];
+  aVencer: FaturaAVencer;
+  doMes: FaturaView;
   categoriaNomePorId: Record<string, string>;
 }
 
@@ -207,7 +221,7 @@ function CompraRow({
           {saida.parcela ? <span className="text-ink-3"> · {saida.parcela}</span> : ""}
         </p>
         <p className="type-caption text-ink-3">
-          {categoriaNome} · {formatDataCurta(saida.vencimento)} ·{" "}
+          {categoriaNome} · {formatDataCurta(saida.data)} ·{" "}
           <span className={saida.status === "Pago" ? "text-pos" : "text-warn"}>{saida.status}</span>
         </p>
       </div>
@@ -235,13 +249,60 @@ function CompraRow({
   );
 }
 
+function ListaCompras({
+  compras,
+  categorias,
+  categoriaNomePorId,
+  onMutou,
+}: {
+  compras: Saida[];
+  categorias: Categoria[];
+  categoriaNomePorId: Record<string, string>;
+  onMutou: () => void;
+}) {
+  return (
+    <div className="flex flex-col divide-y divide-hairline">
+      {compras.map((s) => (
+        <CompraRow
+          key={s.id}
+          saida={s}
+          categorias={categorias}
+          categoriaNome={categoriaNomePorId[s.categoria_id ?? ""] ?? "Sem categoria"}
+          onMutou={onMutou}
+        />
+      ))}
+    </div>
+  );
+}
+
 function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Categoria[] }) {
-  const { cartao } = view;
-  const [aberto, setAberto] = useState(false);
+  const { cartao, aVencer, doMes } = view;
   const router = useRouter();
   const onMutou = () => router.refresh();
 
-  const temDetalhe = view.compras.length > 0 || view.parcelasFuturas.length > 0;
+  const [abertoAVencer, setAbertoAVencer] = useState(aVencer.temPendente);
+  const [abertoDoMes, setAbertoDoMes] = useState(false);
+  const [erroPagar, setErroPagar] = useState<string | null>(null);
+  const [pagando, startPagar] = useTransition();
+
+  const aVencerPaga = aVencer.compras.length > 0 && !aVencer.temPendente;
+
+  function pagarFatura() {
+    if (!confirm(`Marcar como paga a fatura de ${formatCentsToBRL(aVencer.totalPendenteCents)}?`)) return;
+    startPagar(async () => {
+      const { error } = await marcarFaturaComoPaga({
+        cartaoId: cartao.id,
+        ano: aVencer.cicloAno,
+        mes: aVencer.cicloMes,
+      });
+      if (error) {
+        setErroPagar(error);
+        return;
+      }
+      setErroPagar(null);
+      onMutou();
+    });
+  }
 
   return (
     <Card className="flex flex-col gap-4">
@@ -256,67 +317,91 @@ function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Catego
         <PersonTag pessoa={cartao.dono} />
       </div>
 
-      <div>
-        <p className="type-eyebrow text-ink-3">Fatura atual</p>
-        <p className="type-headline mt-1 text-ink">
-          <Amount cents={view.faturaAtual} semantic="none" />
-        </p>
-      </div>
-
       {cartao.limite_cents !== null && <LimiteBar comprometido={view.comprometido} limite={cartao.limite_cents} />}
 
-      {temDetalhe ? (
+      {/* Fatura a vencer (mês anterior) — a acionável */}
+      <div className="rounded-sm border border-hairline-strong bg-bg p-3.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <p className="type-label text-ink">{aVencer.titulo}</p>
+            <p className="type-caption text-ink-3">a vencer · {aVencer.vencimentoLabel}</p>
+          </div>
+          <Amount cents={aVencer.totalCents} semantic="none" className="type-title text-ink" />
+        </div>
+
+        {aVencer.compras.length === 0 ? (
+          <p className="type-caption mt-2 text-ink-3">Sem fatura a vencer.</p>
+        ) : aVencerPaga ? (
+          <p className="type-label mt-3 flex items-center gap-1.5 text-pos">
+            <Check size={15} /> Fatura paga
+          </p>
+        ) : (
+          <Button variant="primary" onClick={pagarFatura} disabled={pagando} className="mt-3 w-full py-2.5">
+            <CheckCheck size={16} />
+            {pagando ? "Pagando..." : `Marcar fatura como paga · ${formatCentsToBRL(aVencer.totalPendenteCents)}`}
+          </Button>
+        )}
+        {erroPagar && <p className="type-caption mt-2 text-neg">{erroPagar}</p>}
+
+        {aVencer.compras.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setAbertoAVencer((v) => !v)}
+              aria-expanded={abertoAVencer}
+              className="mt-3 flex w-full items-center justify-between text-ink-2 transition-colors hover:text-ink"
+            >
+              <span className="type-caption">
+                {aVencer.compras.length} compra{aVencer.compras.length === 1 ? "" : "s"}
+              </span>
+              <ChevronDown size={15} className={`transition-transform ${abertoAVencer ? "rotate-180" : ""}`} />
+            </button>
+            {abertoAVencer && (
+              <div className="mt-1">
+                <ListaCompras
+                  compras={aVencer.compras}
+                  categorias={categorias}
+                  categoriaNomePorId={view.categoriaNomePorId}
+                  onMutou={onMutou}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Fatura do mês em foco — ainda acumulando */}
+      <div>
         <button
           type="button"
-          onClick={() => setAberto((v) => !v)}
-          aria-expanded={aberto}
-          className="flex items-center justify-between border-t border-hairline pt-3 text-ink-2 transition-colors hover:text-ink"
+          onClick={() => setAbertoDoMes((v) => !v)}
+          aria-expanded={abertoDoMes}
+          disabled={doMes.compras.length === 0}
+          className="flex w-full items-baseline justify-between gap-3 text-left disabled:cursor-default"
         >
-          <span className="type-label">
-            {view.compras.length} compra{view.compras.length === 1 ? "" : "s"} no ciclo
-            {view.parcelasFuturas.length > 0 ? ` · ${view.parcelasFuturas.length} parcela(s) futura(s)` : ""}
-          </span>
-          <ChevronDown size={16} className={`transition-transform ${aberto ? "rotate-180" : ""}`} />
+          <div>
+            <p className="type-label text-ink">{doMes.titulo}</p>
+            <p className="type-caption text-ink-3">do mês · {doMes.vencimentoLabel}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Amount cents={doMes.totalCents} semantic="none" className="type-title text-ink" />
+            {doMes.compras.length > 0 && (
+              <ChevronDown size={15} className={`text-ink-3 transition-transform ${abertoDoMes ? "rotate-180" : ""}`} />
+            )}
+          </div>
         </button>
-      ) : (
-        <p className="type-caption border-t border-hairline pt-3 text-ink-3">Nenhuma compra neste ciclo.</p>
-      )}
-
-      {aberto && (
-        <div className="flex flex-col gap-4">
-          {view.compras.length > 0 && (
-            <div>
-              <p className="type-eyebrow mb-1 text-ink-3">Compras do ciclo</p>
-              <div className="flex flex-col divide-y divide-hairline">
-                {view.compras.map((s) => (
-                  <CompraRow
-                    key={s.id}
-                    saida={s}
-                    categorias={categorias}
-                    categoriaNome={view.categoriaNomePorId[s.categoria_id ?? ""] ?? "Sem categoria"}
-                    onMutou={onMutou}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {view.parcelasFuturas.length > 0 && (
-            <div>
-              <p className="type-eyebrow mb-1.5 text-ink-3">Parcelas futuras</p>
-              <ul className="flex flex-col gap-1.5">
-                {view.parcelasFuturas.map((p) => (
-                  <li key={p.id} className="flex items-baseline justify-between gap-3">
-                    <span className="type-caption min-w-0 truncate text-ink-2">
-                      {p.nomeBase} · {p.parcela}
-                    </span>
-                    <Amount cents={p.totalCents} semantic="none" className="type-caption shrink-0 text-ink-3" />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+        {abertoDoMes && doMes.compras.length > 0 && (
+          <div className="mt-2">
+            <ListaCompras
+              compras={doMes.compras}
+              categorias={categorias}
+              categoriaNomePorId={view.categoriaNomePorId}
+              onMutou={onMutou}
+            />
+          </div>
+        )}
+        {doMes.compras.length === 0 && <p className="type-caption mt-1 text-ink-3">Nenhuma compra ainda neste mês.</p>}
+      </div>
     </Card>
   );
 }
