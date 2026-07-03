@@ -1,26 +1,239 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------------ */
+/* Identidade visual — "extrato de banco privado".                           */
+/*                                                                           */
+/* Papel mineral, tinta verde-garrafa, serif editorial (Newsreader) apenas   */
+/* em títulos e valores-destaque. Cor nunca decora: verde = dinheiro         */
+/* positivo, granada = dinheiro negativo, âmbar = atenção. Diego e Vitor     */
+/* têm matizes próprios (ardósia / bronze) usados só em tags e pontos.       */
+/* Assinatura estrutural: régua contábil dupla sob os totais.                */
+/* ------------------------------------------------------------------------ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #f4f4f0;
+  --color-surface: #fdfdfb;
+  --color-raised: #ffffff;
+  --color-ink: #1c2420;
+  --color-ink-2: #5c665f;
+  --color-ink-3: #8b948d;
+  --color-hairline: #e2e4dc;
+  --color-hairline-strong: #c6cabd;
+
+  --color-brand: #1e4d3b;
+  --color-brand-hover: #163a2c;
+  --color-on-brand: #f2f7f2;
+  --color-brand-tint: #e5eee7;
+  --color-on-brand-tint: #1b3b2c;
+
+  --color-pos: #177149;
+  --color-neg: #a63a41;
+  --color-neg-tint: #f7e9e8;
+  --color-on-neg-tint: #6d2226;
+  --color-warn: #8a6420;
+  --color-warn-tint: #f4ecd8;
+
+  --color-diego: #47608c;
+  --color-diego-tint: #e8edf5;
+  --color-vitor: #8c6238;
+  --color-vitor-tint: #f3ece1;
+
+  --color-chip-ink: #1c2420;
+  --color-on-chip-ink: #f4f4f0;
+
+  --color-track: #e9eae3;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --shadow-raised: 0 1px 2px rgba(28, 36, 32, 0.05), 0 10px 28px -14px rgba(28, 36, 32, 0.12);
+}
+
+[data-theme="dark"] {
+  --color-bg: #121613;
+  --color-surface: #181d19;
+  --color-raised: #1e241f;
+  --color-ink: #e9ece7;
+  --color-ink-2: #a4ada5;
+  --color-ink-3: #707970;
+  --color-hairline: rgba(233, 236, 231, 0.1);
+  --color-hairline-strong: rgba(233, 236, 231, 0.24);
+
+  --color-brand: #8fc4a8;
+  --color-brand-hover: #a8d4bc;
+  --color-on-brand: #0f241a;
+  --color-brand-tint: #223529;
+  --color-on-brand-tint: #bcdcc9;
+
+  --color-pos: #6cc296;
+  --color-neg: #e08b90;
+  --color-neg-tint: #3a2325;
+  --color-on-neg-tint: #eec3c5;
+  --color-warn: #d4b06a;
+  --color-warn-tint: #34301e;
+
+  --color-diego: #93aed6;
+  --color-diego-tint: #222b3a;
+  --color-vitor: #cfa576;
+  --color-vitor-tint: #32291c;
+
+  --color-chip-ink: #e9ece7;
+  --color-on-chip-ink: #121613;
+
+  --color-track: #262d27;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-raised: var(--color-raised);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-hairline: var(--color-hairline);
+  --color-hairline-strong: var(--color-hairline-strong);
+
+  --color-brand: var(--color-brand);
+  --color-brand-hover: var(--color-brand-hover);
+  --color-on-brand: var(--color-on-brand);
+  --color-brand-tint: var(--color-brand-tint);
+  --color-on-brand-tint: var(--color-on-brand-tint);
+
+  --color-pos: var(--color-pos);
+  --color-neg: var(--color-neg);
+  --color-neg-tint: var(--color-neg-tint);
+  --color-on-neg-tint: var(--color-on-neg-tint);
+  --color-warn: var(--color-warn);
+  --color-warn-tint: var(--color-warn-tint);
+
+  --color-diego: var(--color-diego);
+  --color-diego-tint: var(--color-diego-tint);
+  --color-vitor: var(--color-vitor);
+  --color-vitor-tint: var(--color-vitor-tint);
+
+  --color-chip-ink: var(--color-chip-ink);
+  --color-on-chip-ink: var(--color-on-chip-ink);
+  --color-track: var(--color-track);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  --shadow-raised: var(--shadow-raised);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Escala tipográfica — Newsreader (display, valores-destaque) e Hanken      */
+/* Grotesk (interface). Números de tabela sempre tabulares.                  */
+/* ------------------------------------------------------------------------ */
+
+.type-hero {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  line-height: 1.05;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  font-variant-numeric: lining-nums;
+}
+.type-display {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.type-headline {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 500;
+}
+.type-title {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.type-body {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.type-label {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  font-weight: 500;
+}
+.type-caption {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  font-weight: 400;
+}
+.type-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.figures {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* O canvas do gráfico não participa do fluxo: sem isso, a largura
+ * intrínseca dele define o min-content do grid e estoura o viewport. */
+.trend-chart-wrap > canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Régua contábil dupla — assinatura do sistema, usada sob totais. */
+.rule-ledger {
+  border-bottom: 3px double var(--color-hairline-strong);
+}
+
+/* Foco visível consistente em todo elemento interativo. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
