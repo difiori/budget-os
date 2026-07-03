@@ -123,7 +123,7 @@ export async function criarCartao(formData: FormData): Promise<ActionResult> {
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
-  revalidatePath("/faturas");
+  revalidatePath("/cartoes");
   revalidatePath("/lancar");
   return { error: null };
 }
@@ -162,7 +162,7 @@ export async function atualizarCartao(id: string, formData: FormData): Promise<A
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
-  revalidatePath("/faturas");
+  revalidatePath("/cartoes");
   revalidatePath("/lancar");
   return { error: null };
 }
@@ -173,7 +173,7 @@ export async function excluirCartao(id: string): Promise<ActionResult> {
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
-  revalidatePath("/faturas");
+  revalidatePath("/cartoes");
   return { error: null };
 }
 

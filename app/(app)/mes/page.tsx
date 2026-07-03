@@ -6,8 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { getContaAtiva } from "@/lib/auth/conta-ativa";
-import { pessoaPorEmail } from "@/lib/auth/pessoa";
+import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
 import { entradasDoMesCents, gastosDoMesCents, saldoPrevistoCents } from "@/lib/domain/mes";
@@ -28,15 +27,9 @@ export default async function MesPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  let pessoa: PessoaFiltro;
-  if (params.pessoa === "Diego" || params.pessoa === "Vitor" || params.pessoa === "Casal") {
-    pessoa = params.pessoa;
-  } else {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    pessoa = (await getContaAtiva()) ?? pessoaPorEmail(user?.email) ?? "Casal";
-  }
+  // Escopo padrão = pessoa ativa do menu lateral; "Casal" é a única exceção.
+  const ativa = await pessoaAtiva();
+  const pessoa: PessoaFiltro = params.pessoa === "Casal" ? "Casal" : ativa;
 
   const referencia = hoje();
   const mesReferencia: CalendarDate = {
@@ -108,9 +101,8 @@ export default async function MesPage({
       </PageHeader>
 
       <div className="mb-6 flex flex-wrap gap-1.5">
-        {(["Diego", "Vitor", "Casal"] as const).map((p) => (
-          <ChipLink key={p} label={p} selected={pessoa === p} href={monthHref(p, mesReferencia)} />
-        ))}
+        <ChipLink label={ativa} selected={pessoa === ativa} href={monthHref(ativa, mesReferencia)} />
+        <ChipLink label="Casal" selected={pessoa === "Casal"} href={monthHref("Casal", mesReferencia)} />
       </div>
 
       <Card variant="raised" className="p-6">

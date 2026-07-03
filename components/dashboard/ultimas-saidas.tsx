@@ -60,7 +60,7 @@ export function UltimasSaidas({
           ))}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <Chip label="Mais recentes" selected={ordenacao === "recentes"} onClick={() => setOrdenacao("recentes")} />
+          <Chip label="Por vencimento" selected={ordenacao === "recentes"} onClick={() => setOrdenacao("recentes")} />
           <Chip label="Maior valor" selected={ordenacao === "valor"} onClick={() => setOrdenacao("valor")} />
         </div>
       </div>

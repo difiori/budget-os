@@ -368,10 +368,12 @@ function SaidaRow({
 function EntradaRow({
   entrada,
   destinoNome,
+  contas,
   onRemovido,
 }: {
   entrada: Entrada;
   destinoNome: string;
+  contas: { id: string; nome: string }[];
   onRemovido: (id: string) => void;
 }) {
   const [editando, setEditando] = useState(false);
@@ -379,6 +381,7 @@ function EntradaRow({
   const [valor, setValor] = useState(centsToInputValue(entrada.quantia_cents));
   const [data, setData] = useState(isoParaInput(entrada.data));
   const [status, setStatus] = useState<EntradaStatus>(entrada.status);
+  const [contaDestinoId, setContaDestinoId] = useState(entrada.conta_destino_id);
   const [erro, setErro] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -399,7 +402,8 @@ function EntradaRow({
         status,
         statusAnterior: entrada.status,
         quantiaCentsAnterior: entrada.quantia_cents,
-        contaDestinoId: entrada.conta_destino_id,
+        contaDestinoId,
+        contaDestinoIdAnterior: entrada.conta_destino_id,
       });
       if (error) {
         setErro(error);
@@ -447,7 +451,14 @@ function EntradaRow({
           </CampoEdit>
         </div>
 
-        <p className="type-caption mt-3 text-ink-2">Conta: {destinoNome}</p>
+        <div className="mt-3">
+          <p className="type-caption mb-1.5 text-ink-2">Conta</p>
+          <div className="flex flex-wrap gap-1.5">
+            {contas.map((c) => (
+              <Chip key={c.id} label={c.nome} selected={contaDestinoId === c.id} onClick={() => setContaDestinoId(c.id)} />
+            ))}
+          </div>
+        </div>
 
         <div className="mt-3">
           <p className="type-caption mb-1.5 text-ink-2">Status</p>
@@ -688,6 +699,7 @@ export function LancamentosList({
   entradasIniciais,
   transferenciasIniciais,
   categorias,
+  contas,
   contaPorId,
   cartaoPorId,
 }: {
@@ -695,6 +707,7 @@ export function LancamentosList({
   entradasIniciais: Entrada[];
   transferenciasIniciais: Transferencia[];
   categorias: Categoria[];
+  contas: { id: string; nome: string }[];
   contaPorId: Map<string, string>;
   cartaoPorId: Map<string, string>;
 }) {
@@ -751,6 +764,7 @@ export function LancamentosList({
           key={e.id}
           entrada={e}
           destinoNome={contaPorId.get(e.conta_destino_id) ?? "—"}
+          contas={contas}
           onRemovido={(id) => setEntradas((prev) => prev.filter((e) => e.id !== id))}
         />
       ),

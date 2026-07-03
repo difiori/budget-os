@@ -114,6 +114,8 @@ export default async function DashboardPage({
   const mesAnterior = addMonths(mesReferencia, -1);
   const mesSeguinte = addMonths(mesReferencia, 1);
   const meses6 = ultimosMeses(mesReferencia, 6);
+  const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
+  const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
 
   const {
     data: { user },
@@ -137,22 +139,24 @@ export default async function DashboardPage({
       .from("entrada")
       .select("id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"),
     supabase.from("categoria").select("id, nome, dono"),
-    // Buscadas por pessoa (não só um corte global por created_at) porque a
-    // importação histórica do Notion gravou todas as linhas de uma pessoa
-    // antes da outra — um corte único por recência global deixava a outra
-    // pessoa sem nenhuma linha ao filtrar por ela no painel.
+    // Só as saídas com vencimento no mês em foco — nada de outros meses
+    // vazando na lista. Buscadas por pessoa (a importação histórica gravou uma
+    // pessoa antes da outra, então um corte único deixaria a outra de fora) e
+    // ordenadas por vencimento.
     supabase
       .from("saida")
       .select(saidaColunasRecentes)
       .eq("pessoa", "Diego")
-      .order("created_at", { ascending: false })
-      .limit(30),
+      .gte("vencimento", inicioMes)
+      .lt("vencimento", fimMes)
+      .order("vencimento", { ascending: false }),
     supabase
       .from("saida")
       .select(saidaColunasRecentes)
       .eq("pessoa", "Vitor")
-      .order("created_at", { ascending: false })
-      .limit(30),
+      .gte("vencimento", inicioMes)
+      .lt("vencimento", fimMes)
+      .order("vencimento", { ascending: false }),
   ]);
 
   const todasContas = (contas ?? []) as Conta[];
@@ -183,8 +187,8 @@ export default async function DashboardPage({
   const maiorCategoriaTotal = categoriasOrdenadas[0]?.total ?? 1;
   const totalCategorias = categoriasOrdenadas.reduce((sum, c) => sum + c.total, 0);
 
-  const saidasRecentes = [...((recentesDiego ?? []) as Saida[]), ...((recentesVitor ?? []) as Saida[])].sort(
-    (a, b) => b.created_at.localeCompare(a.created_at)
+  const saidasRecentes = [...((recentesDiego ?? []) as Saida[]), ...((recentesVitor ?? []) as Saida[])].sort((a, b) =>
+    (b.vencimento ?? b.data ?? b.created_at).localeCompare(a.vencimento ?? a.data ?? a.created_at)
   );
 
   const resultadoMes = ativo.entradasMes - ativo.saidasMes;

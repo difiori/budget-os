@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Cartao, Categoria, Conta } from "@/lib/domain/types";
 import { PageHeader } from "@/components/ui/page-header";
+import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { LancarForm } from "./lancar-form";
 
 export default async function LancarPage() {
   const supabase = await createClient();
+  const ativa = await pessoaAtiva();
 
   const [{ data: contas }, { data: cartoes }, { data: categorias }] = await Promise.all([
     supabase.from("conta").select("id, nome, dono, saldo_atual_cents").order("nome"),
@@ -22,6 +24,7 @@ export default async function LancarPage() {
         contas={(contas ?? []) as Conta[]}
         cartoes={(cartoes ?? []) as Cartao[]}
         categorias={(categorias ?? []) as Categoria[]}
+        pessoaAtiva={ativa}
       />
     </main>
   );

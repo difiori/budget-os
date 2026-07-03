@@ -33,7 +33,7 @@ async function editorAutenticado(supabase: Cliente) {
 function revalidarTudo() {
   revalidatePath("/lancamentos");
   revalidatePath("/");
-  revalidatePath("/faturas");
+  revalidatePath("/cartoes");
   revalidatePath("/mes");
 }
 
@@ -182,9 +182,11 @@ export async function atualizarEntrada(input: {
   statusAnterior: EntradaStatus;
   quantiaCentsAnterior: number;
   contaDestinoId: string;
+  contaDestinoIdAnterior: string;
 }): Promise<ActionResult> {
   if (!input.nome.trim()) return { error: "Informe o nome." };
   if (input.quantiaCents <= 0) return { error: "O valor precisa ser maior que zero." };
+  if (!input.contaDestinoId) return { error: "Selecione a conta." };
 
   const supabase = await createClient();
   const editadoPor = await editorAutenticado(supabase);
@@ -197,21 +199,40 @@ export async function atualizarEntrada(input: {
       quantia_cents: input.quantiaCents,
       data: input.data,
       status: input.status,
+      conta_destino_id: input.contaDestinoId,
       editado_por: editadoPor,
       atualizado_em: new Date().toISOString(),
     })
     .eq("id", input.id);
   if (error) return { error: error.message };
 
-  const erroSaldo = await ajustarSaldoEntrada(
-    supabase,
-    input.contaDestinoId,
-    input.statusAnterior,
-    input.status,
-    input.quantiaCentsAnterior,
-    input.quantiaCents
-  );
-  if (erroSaldo) return { error: `Lançamento salvo, mas o saldo não foi ajustado: ${erroSaldo}` };
+  if (input.contaDestinoId === input.contaDestinoIdAnterior) {
+    const erroSaldo = await ajustarSaldoEntrada(
+      supabase,
+      input.contaDestinoId,
+      input.statusAnterior,
+      input.status,
+      input.quantiaCentsAnterior,
+      input.quantiaCents
+    );
+    if (erroSaldo) return { error: `Lançamento salvo, mas o saldo não foi ajustado: ${erroSaldo}` };
+  } else {
+    // Conta mudou: tira o efeito antigo da conta antiga e aplica o novo na nova.
+    if (input.statusAnterior === "Recebido") {
+      const { error: e } = await supabase.rpc("debitar_conta", {
+        p_conta_id: input.contaDestinoIdAnterior,
+        p_valor_cents: input.quantiaCentsAnterior,
+      });
+      if (e) return { error: `Lançamento salvo, mas o saldo não foi ajustado: ${e.message}` };
+    }
+    if (input.status === "Recebido") {
+      const { error: e } = await supabase.rpc("creditar_conta", {
+        p_conta_id: input.contaDestinoId,
+        p_valor_cents: input.quantiaCents,
+      });
+      if (e) return { error: `Lançamento salvo, mas o saldo não foi ajustado: ${e.message}` };
+    }
+  }
 
   revalidarTudo();
   return { error: null };

@@ -10,7 +10,7 @@ import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { MESES_ABREV } from "@/lib/format/meses";
-import type { Cartao, Categoria, Conta, EntradaStatus, FormatoCompra, SaidaStatus } from "@/lib/domain/types";
+import type { Cartao, Categoria, Conta, EntradaStatus, FormatoCompra, Pessoa, SaidaStatus } from "@/lib/domain/types";
 
 type Tipo = "Entrada" | "Saida" | "Transferencia";
 type Modo = "Debito" | "Credito";
@@ -65,9 +65,10 @@ interface LancarFormProps {
   contas: Conta[];
   cartoes: Cartao[];
   categorias: Categoria[];
+  pessoaAtiva: Pessoa;
 }
 
-export function LancarForm({ contas, cartoes, categorias }: LancarFormProps) {
+export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarFormProps) {
   const [state, formAction, isPending] = useActionState(criarLancamento, initialState);
 
   const [tipo, setTipo] = useState<Tipo>("Saida");
@@ -85,7 +86,11 @@ export function LancarForm({ contas, cartoes, categorias }: LancarFormProps) {
   const [valorInput, setValorInput] = useState("");
   const [dataInput, setDataInput] = useState(hojeISO());
 
-  const opcoesDestino = tipo === "Entrada" ? contas : modo === "Credito" ? cartoes : contas;
+  // Saída/entrada mostram só as contas/cartões da pessoa ativa do menu;
+  // transferência (mais abaixo) usa todas as contas do casal.
+  const contasDaPessoa = contas.filter((c) => c.dono === pessoaAtiva);
+  const cartoesDaPessoa = cartoes.filter((c) => c.dono === pessoaAtiva);
+  const opcoesDestino = tipo === "Entrada" ? contasDaPessoa : modo === "Credito" ? cartoesDaPessoa : contasDaPessoa;
 
   // Na transferência, "pessoa" é o dono da conta de origem (quem move o
   // dinheiro); nos outros tipos, o dono do destino selecionado.

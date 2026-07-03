@@ -14,7 +14,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancar", label: "Lançar", icon: PlusCircle },
-  { href: "/faturas", label: "Faturas", icon: CreditCard },
+  { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/mes", label: "Mês", icon: CalendarRange },
   { href: "/lancamentos", label: "Extrato", icon: Receipt },
   { href: "/config", label: "Config", icon: Settings },
