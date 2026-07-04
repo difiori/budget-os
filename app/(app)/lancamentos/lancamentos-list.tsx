@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CheckCheck, Pencil, Trash2, X } from "lucide-react";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { Amount } from "@/components/ui/amount";
@@ -9,6 +9,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { PersonDot } from "@/components/ui/person-tag";
 import { inputClasses } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { nomeComParcela, nomeSemParcela } from "@/lib/domain/parcelamento";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
@@ -16,9 +17,12 @@ import {
   atualizarEntrada,
   atualizarSaida,
   atualizarTransferencia,
+  definirCategoriaEmLote,
   excluirEntrada,
   excluirSaida,
   excluirTransferencia,
+  marcarEntradasComoRecebidas,
+  marcarSaidasComoPagas,
 } from "./actions";
 import {
   FiltrosBar,
@@ -768,6 +772,12 @@ export function LancamentosList({
   const [transferencias, setTransferencias] = useState(transferenciasIniciais);
   const [filtros, setFiltros] = useState<Filtros>(() => filtrosPadrao(pessoaAtiva));
   const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "data", direcao: "desc" });
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecao, setSelecao] = useState<Set<string>>(new Set());
+  const [catLote, setCatLote] = useState("");
+  const [lotePendente, iniciarLote] = useTransition();
+  const toast = useToast();
+  const confirmar = useConfirm();
 
   const categoriaPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c.nome])), [categorias]);
 
@@ -889,6 +899,126 @@ export function LancamentosList({
   const temEntrada = visiveis.some((d) => d.tipo === "Entrada");
   const temTransf = visiveis.some((d) => d.tipo === "Transferencia");
 
+  // ---- Seleção em lote ----------------------------------------------------
+  function toggleSel(key: string) {
+    setSelecao((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  }
+  function sairSelecao() {
+    setModoSelecao(false);
+    setSelecao(new Set());
+    setCatLote("");
+  }
+  const visiveisKeys = visiveis.map((d) => d.key);
+  const todasSelecionadas = visiveis.length > 0 && visiveisKeys.every((k) => selecao.has(k));
+  function toggleTodas() {
+    setSelecao(todasSelecionadas ? new Set() : new Set(visiveisKeys));
+  }
+
+  const selecionados = visiveis.filter((d) => selecao.has(d.key));
+  const idParaKey = (d: ItemDescriptor) => d.key.slice(d.key.indexOf("-") + 1);
+  const idsPorTipo = (tipo: ItemDescriptor["tipo"]) =>
+    selecionados.filter((d) => d.tipo === tipo).map(idParaKey);
+
+  async function excluirSelecionados() {
+    const total = selecionados.length;
+    if (!total) return;
+    const ok = await confirmar(`Excluir ${total} lançamento${total > 1 ? "s" : ""}? Não dá pra desfazer.`);
+    if (!ok) return;
+    const alvos = [...selecionados];
+    iniciarLote(async () => {
+      let falhas = 0;
+      for (const d of alvos) {
+        const id = idParaKey(d);
+        let error: string | null = null;
+        if (d.tipo === "Saida") {
+          const s = saidas.find((x) => x.id === id);
+          if (s)
+            ({ error } = await excluirSaida({
+              id: s.id,
+              status: s.status,
+              totalCents: s.total_cents,
+              metodo: s.metodo,
+              contaId: s.conta_id,
+              cartaoId: s.cartao_id,
+            }));
+        } else if (d.tipo === "Entrada") {
+          const e = entradas.find((x) => x.id === id);
+          if (e)
+            ({ error } = await excluirEntrada({
+              id: e.id,
+              status: e.status,
+              quantiaCents: e.quantia_cents,
+              contaDestinoId: e.conta_destino_id,
+            }));
+        } else {
+          const t = transferencias.find((x) => x.id === id);
+          if (t)
+            ({ error } = await excluirTransferencia({
+              id: t.id,
+              valorCents: t.valor_cents,
+              deContaId: t.de_conta_id,
+              paraContaId: t.para_conta_id,
+            }));
+        }
+        if (error) {
+          falhas++;
+          continue;
+        }
+        if (d.tipo === "Saida") setSaidas((prev) => prev.filter((x) => x.id !== id));
+        else if (d.tipo === "Entrada") setEntradas((prev) => prev.filter((x) => x.id !== id));
+        else setTransferencias((prev) => prev.filter((x) => x.id !== id));
+      }
+      sairSelecao();
+      toast(falhas ? `${total - falhas} excluído(s), ${falhas} com erro.` : `${total} lançamento${total > 1 ? "s" : ""} excluído${total > 1 ? "s" : ""}.`);
+    });
+  }
+
+  function liquidarSelecionados() {
+    const saidaIds = idsPorTipo("Saida");
+    const entradaIds = idsPorTipo("Entrada");
+    if (!saidaIds.length && !entradaIds.length) {
+      toast("Transferências não têm status — selecione saídas ou entradas.");
+      return;
+    }
+    iniciarLote(async () => {
+      const r1 = await marcarSaidasComoPagas(saidaIds);
+      const r2 = await marcarEntradasComoRecebidas(entradaIds);
+      if (r1.error || r2.error) {
+        toast(`Erro ao liquidar: ${r1.error ?? r2.error}`);
+        return;
+      }
+      setSaidas((prev) => prev.map((s) => (saidaIds.includes(s.id) && s.status !== "Pago" ? { ...s, status: "Pago" } : s)));
+      setEntradas((prev) =>
+        prev.map((e) => (entradaIds.includes(e.id) && e.status !== "Recebido" ? { ...e, status: "Recebido" } : e))
+      );
+      sairSelecao();
+      toast(`${r1.feitas + r2.feitas} marcado(s) como pago/recebido.`);
+    });
+  }
+
+  function aplicarCategoria(categoriaId: string) {
+    const saidaIds = idsPorTipo("Saida");
+    if (!saidaIds.length) {
+      toast("Categoria só se aplica a saídas.");
+      return;
+    }
+    iniciarLote(async () => {
+      const { error } = await definirCategoriaEmLote(saidaIds, categoriaId || null);
+      if (error) {
+        toast(`Erro ao trocar categoria: ${error}`);
+        return;
+      }
+      setSaidas((prev) => prev.map((s) => (saidaIds.includes(s.id) ? { ...s, categoria_id: categoriaId || null } : s)));
+      sairSelecao();
+      toast(`Categoria aplicada a ${saidaIds.length} saída${saidaIds.length > 1 ? "s" : ""}.`);
+    });
+  }
+
   return (
     <>
       <FiltrosBar
@@ -899,10 +1029,55 @@ export function LancamentosList({
         categorias={catOpts}
         contasCartoes={ccOpts}
         pessoas={pessoasOpts}
-        modoSelecao={false}
-        onToggleSelecao={() => {}}
+        modoSelecao={modoSelecao}
+        onToggleSelecao={() => (modoSelecao ? sairSelecao() : setModoSelecao(true))}
+        mostrarSelecao
         totalVisivel={visiveis.length}
       />
+
+      {modoSelecao && (
+        <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-hairline bg-raised p-2 shadow-raised">
+          <span className="type-label px-1.5 text-ink">
+            {selecionados.length} selecionado{selecionados.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={liquidarSelecionados}
+            disabled={lotePendente || selecionados.length === 0}
+            className="type-label flex items-center gap-1.5 rounded-sm bg-brand-tint px-3 py-1.5 font-medium text-on-brand-tint transition-colors hover:brightness-97 disabled:opacity-40"
+          >
+            <CheckCheck size={15} />
+            Marcar pago/recebido
+          </button>
+          <div className="w-52">
+            <Combobox
+              options={catOpts}
+              value={catLote}
+              onChange={aplicarCategoria}
+              placeholder="Trocar categoria"
+              searchPlaceholder="Buscar categoria"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={excluirSelecionados}
+            disabled={lotePendente || selecionados.length === 0}
+            className="type-label flex items-center gap-1.5 rounded-sm bg-neg-tint px-3 py-1.5 font-medium text-on-neg-tint transition-colors hover:brightness-97 disabled:opacity-40"
+          >
+            <Trash2 size={15} />
+            Excluir
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={sairSelecao}
+            className="type-label flex items-center gap-1 rounded-sm px-2.5 py-1.5 text-ink-2 transition-colors hover:bg-bg hover:text-ink"
+          >
+            <X size={15} />
+            Concluir
+          </button>
+        </div>
+      )}
 
       {visiveis.length === 0 ? (
         <div className="rounded-md border border-hairline bg-surface p-8 text-center">
@@ -910,8 +1085,19 @@ export function LancamentosList({
         </div>
       ) : (
         <div className="rounded-md border border-hairline bg-surface">
-          <div className={`${ROW_GRID} border-b border-hairline px-3 py-2.5`}>
-            <span />
+          <div className="hidden items-stretch border-b border-hairline xl:flex">
+            {modoSelecao && (
+              <label className="flex w-11 shrink-0 items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={todasSelecionadas}
+                  onChange={toggleTodas}
+                  aria-label="Selecionar todos"
+                  className="accent-brand"
+                />
+              </label>
+            )}
+            <div className={`${ROW_GRID} flex-1 px-3 py-2.5`}>
             <CabecalhoOrdenavel label="Nome" campo="nome" ordenacao={ordenacao} onClick={() => alternarOrdenacao("nome")} />
             <CabecalhoOrdenavel
               label="Categoria"
@@ -931,9 +1117,25 @@ export function LancamentosList({
             />
             <span className="type-eyebrow text-center text-ink-3">Status</span>
             <span className="type-eyebrow text-right text-ink-3">Ações</span>
+            </div>
           </div>
 
-          {visiveis.map((item) => item.node)}
+          {visiveis.map((item) => (
+            <div key={item.key} className="flex items-stretch">
+              {modoSelecao && (
+                <label className="flex w-11 shrink-0 items-center justify-center border-b border-hairline">
+                  <input
+                    type="checkbox"
+                    checked={selecao.has(item.key)}
+                    onChange={() => toggleSel(item.key)}
+                    aria-label="Selecionar lançamento"
+                    className="accent-brand"
+                  />
+                </label>
+              )}
+              <div className="min-w-0 flex-1">{item.node}</div>
+            </div>
+          ))}
 
           {/* Fecho contábil: régua dupla e totais do recorte filtrado. */}
           <div className="rule-ledger" aria-hidden="true" />
