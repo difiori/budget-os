@@ -7,6 +7,7 @@ import { addMonths, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
+import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { MESES_ABREV } from "@/lib/format/meses";
@@ -408,11 +409,15 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
         <div>
           <p className="type-label mb-2 text-ink-2">Categoria</p>
           {pessoaSelecionada ? (
-            <div className="flex flex-wrap gap-1.5">
-              {categoriasFiltradas.map((c) => (
-                <Chip key={c.id} label={c.nome} selected={categoriaId === c.id} onClick={() => setCategoriaId(c.id)} />
-              ))}
-            </div>
+            <Combobox
+              className="max-w-xs"
+              options={categoriasFiltradas.map((c) => ({ value: c.id, label: c.nome }))}
+              value={categoriaId}
+              onChange={setCategoriaId}
+              placeholder="Selecionar categoria"
+              searchPlaceholder="Buscar categoria"
+              clearable
+            />
           ) : (
             <p className="type-caption text-ink-3">
               Escolha {modo === "Credito" ? "o cartão" : "a conta"} acima — as categorias dependem de quem é o gasto.
