@@ -3,6 +3,7 @@ import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { Sidebar } from "@/components/ui/sidebar";
 import { NavigationBar } from "@/components/ui/navigation-bar";
+import { Calculator } from "@/components/ui/calculator";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 
@@ -26,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavigationBar />
           </div>
         </div>
+        <Calculator />
       </ConfirmProvider>
     </ToastProvider>
   );
