@@ -5,6 +5,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Pencil, Trash2 } from 
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { Amount } from "@/components/ui/amount";
+import { Combobox } from "@/components/ui/combobox";
 import { PersonDot } from "@/components/ui/person-tag";
 import { inputClasses } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
@@ -19,15 +20,23 @@ import {
   excluirSaida,
   excluirTransferencia,
 } from "./actions";
-import type { Categoria, Entrada, EntradaStatus, Saida, SaidaStatus, Transferencia } from "@/lib/domain/types";
+import {
+  FiltrosBar,
+  filtrosPadrao,
+  ordenar,
+  passaFiltro,
+  type CampoOrdenacao,
+  type Filtros,
+  type ItemDescriptor,
+  type Ordenacao,
+} from "./lancamentos-filtros";
+import type { Cartao, Categoria, Conta, Entrada, EntradaStatus, Pessoa, Saida, SaidaStatus, Transferencia } from "@/lib/domain/types";
 
 const STATUS_SAIDA: SaidaStatus[] = ["A pagar", "Pago"];
 const STATUS_ENTRADA: { label: string; value: EntradaStatus }[] = [
   { label: "A receber", value: "Não recebido" },
   { label: "Recebido", value: "Recebido" },
 ];
-
-type CampoOrdenacao = "data" | "valor";
 
 function isoParaInput(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "";
@@ -299,13 +308,16 @@ function SaidaRow({
           {saida.metodo} · {destinoNome}
         </p>
 
-        <div className="mt-3">
+        <div className="mt-3 max-w-xs">
           <p className="type-caption mb-1.5 text-ink-2">Categoria</p>
-          <div className="flex flex-wrap gap-1.5">
-            {categoriasFiltradas.map((c) => (
-              <Chip key={c.id} label={c.nome} selected={categoriaId === c.id} onClick={() => setCategoriaId(c.id)} />
-            ))}
-          </div>
+          <Combobox
+            options={categoriasFiltradas.map((c) => ({ value: c.id, label: c.nome }))}
+            value={categoriaId}
+            onChange={setCategoriaId}
+            placeholder="Sem categoria"
+            searchPlaceholder="Buscar categoria"
+            clearable
+          />
         </div>
 
         <div className="mt-3">
@@ -736,24 +748,26 @@ export function LancamentosList({
   transferenciasIniciais,
   categorias,
   contas,
+  cartoes,
   contaPorId,
   cartaoPorId,
+  pessoaAtiva,
 }: {
   saidasIniciais: Saida[];
   entradasIniciais: Entrada[];
   transferenciasIniciais: Transferencia[];
   categorias: Categoria[];
-  contas: { id: string; nome: string }[];
+  contas: Conta[];
+  cartoes: Pick<Cartao, "id" | "nome" | "dono">[];
   contaPorId: Map<string, string>;
   cartaoPorId: Map<string, string>;
+  pessoaAtiva: Pessoa;
 }) {
   const [saidas, setSaidas] = useState(saidasIniciais);
   const [entradas, setEntradas] = useState(entradasIniciais);
   const [transferencias, setTransferencias] = useState(transferenciasIniciais);
-  const [ordenacao, setOrdenacao] = useState<{ campo: CampoOrdenacao; direcao: "asc" | "desc" }>({
-    campo: "data",
-    direcao: "desc",
-  });
+  const [filtros, setFiltros] = useState<Filtros>(() => filtrosPadrao(pessoaAtiva));
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "data", direcao: "desc" });
 
   const categoriaPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c.nome])), [categorias]);
 
@@ -768,17 +782,36 @@ export function LancamentosList({
     );
   }
 
-  const totalSaidas = useMemo(() => saidas.reduce((sum, s) => sum + s.total_cents, 0), [saidas]);
-  const totalEntradas = useMemo(() => entradas.reduce((sum, e) => sum + e.quantia_cents, 0), [entradas]);
-  const totalTransferencias = useMemo(
-    () => transferencias.reduce((sum, t) => sum + t.valor_cents, 0),
-    [transferencias]
+  // Opções dos filtros (categorias com dono como dica; contas e cartões juntos).
+  const catOpts = useMemo(() => categorias.map((c) => ({ value: c.id, label: c.nome, hint: c.dono })), [categorias]);
+  const ccOpts = useMemo(
+    () => [
+      ...contas.map((c) => ({ value: c.id, label: c.nome, hint: "Conta" })),
+      ...cartoes.map((c) => ({ value: c.id, label: c.nome, hint: "Cartão" })),
+    ],
+    [contas, cartoes]
   );
+  const outraPessoa: Pessoa = pessoaAtiva === "Diego" ? "Vitor" : "Diego";
+  const pessoasOpts = [
+    { value: pessoaAtiva, label: pessoaAtiva },
+    { value: outraPessoa, label: outraPessoa },
+    { value: "Casal" as const, label: "Casal" },
+  ];
 
-  const itens = useMemo(() => {
-    const saidaItens = saidas.map((s) => ({
+  const descritores: ItemDescriptor[] = useMemo(() => {
+    const contasDaPessoa = (p: Pessoa) => contas.filter((c) => c.dono === p).map((c) => ({ id: c.id, nome: c.nome }));
+    const sa: ItemDescriptor[] = saidas.map((s) => ({
       key: `saida-${s.id}`,
-      data: s.vencimento ?? s.data ?? s.created_at,
+      tipo: "Saida",
+      pessoa: s.pessoa,
+      nome: s.nome,
+      categoriaId: s.categoria_id,
+      categoriaNome: categoriaPorId.get(s.categoria_id ?? "") ?? "Sem categoria",
+      metodo: s.metodo,
+      contaCartaoIds: [(s.metodo === "Débito" ? s.conta_id : s.cartao_id) ?? ""].filter(Boolean),
+      origem: s.origem,
+      statusGrupo: s.status === "Pago" ? "Pago" : "A pagar",
+      dataSort: s.vencimento ?? s.data ?? s.created_at,
       valorCents: s.total_cents,
       node: (
         <SaidaRow
@@ -787,29 +820,47 @@ export function LancamentosList({
           categorias={categorias}
           categoriaNome={categoriaPorId.get(s.categoria_id ?? "") ?? "Sem categoria"}
           destinoNome={destinoDaSaida(s)}
-          onRemovido={(id) => setSaidas((prev) => prev.filter((s) => s.id !== id))}
+          onRemovido={(id) => setSaidas((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(saida) => setSaidas((prev) => [...prev, saida])}
         />
       ),
     }));
-    const entradaItens = entradas.map((e) => ({
+    const en: ItemDescriptor[] = entradas.map((e) => ({
       key: `entrada-${e.id}`,
-      data: e.data,
+      tipo: "Entrada",
+      pessoa: e.pessoa,
+      nome: e.nome,
+      categoriaId: null,
+      categoriaNome: "",
+      metodo: null,
+      contaCartaoIds: [e.conta_destino_id],
+      origem: e.origem ?? "Manual",
+      statusGrupo: e.status === "Recebido" ? "Recebido" : "A receber",
+      dataSort: e.data,
       valorCents: e.quantia_cents,
       node: (
         <EntradaRow
           key={e.id}
           entrada={e}
           destinoNome={contaPorId.get(e.conta_destino_id) ?? "—"}
-          contas={contas}
-          onRemovido={(id) => setEntradas((prev) => prev.filter((e) => e.id !== id))}
+          contas={contasDaPessoa(e.pessoa)}
+          onRemovido={(id) => setEntradas((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(entrada) => setEntradas((prev) => [...prev, entrada])}
         />
       ),
     }));
-    const transferenciaItens = transferencias.map((t) => ({
+    const tr: ItemDescriptor[] = transferencias.map((t) => ({
       key: `transferencia-${t.id}`,
-      data: t.data ?? t.created_at,
+      tipo: "Transferencia",
+      pessoa: t.pessoa,
+      nome: t.nome,
+      categoriaId: null,
+      categoriaNome: "",
+      metodo: null,
+      contaCartaoIds: [t.de_conta_id, t.para_conta_id],
+      origem: null,
+      statusGrupo: null,
+      dataSort: t.data ?? t.created_at,
       valorCents: t.valor_cents,
       node: (
         <TransferenciaRow
@@ -817,80 +868,105 @@ export function LancamentosList({
           transferencia={t}
           deNome={contaPorId.get(t.de_conta_id) ?? "—"}
           paraNome={contaPorId.get(t.para_conta_id) ?? "—"}
-          onRemovido={(id) => setTransferencias((prev) => prev.filter((t) => t.id !== id))}
+          onRemovido={(id) => setTransferencias((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(transferencia) => setTransferencias((prev) => [...prev, transferencia])}
         />
       ),
     }));
-    const todos = [...saidaItens, ...entradaItens, ...transferenciaItens];
-    const direcaoMult = ordenacao.direcao === "asc" ? 1 : -1;
-    return todos.sort((a, b) => {
-      if (ordenacao.campo === "valor") return (a.valorCents - b.valorCents) * direcaoMult;
-      return (a.data < b.data ? -1 : a.data > b.data ? 1 : 0) * direcaoMult;
-    });
+    return [...sa, ...en, ...tr];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saidas, entradas, transferencias, categorias, categoriaPorId, contaPorId, cartaoPorId, ordenacao]);
+  }, [saidas, entradas, transferencias, categorias, categoriaPorId, contaPorId, cartaoPorId, contas]);
 
-  if (itens.length === 0) {
-    return (
-      <div className="rounded-md border border-hairline bg-surface p-8 text-center">
-        <p className="type-body text-ink-2">Nenhum lançamento neste mês com os filtros atuais.</p>
-      </div>
-    );
-  }
+  const visiveis = useMemo(
+    () => ordenar(descritores.filter((d) => passaFiltro(d, filtros)), ordenacao),
+    [descritores, filtros, ordenacao]
+  );
+
+  const totalSaidas = visiveis.filter((d) => d.tipo === "Saida").reduce((s, d) => s + d.valorCents, 0);
+  const totalEntradas = visiveis.filter((d) => d.tipo === "Entrada").reduce((s, d) => s + d.valorCents, 0);
+  const totalTransf = visiveis.filter((d) => d.tipo === "Transferencia").reduce((s, d) => s + d.valorCents, 0);
+  const temSaida = visiveis.some((d) => d.tipo === "Saida");
+  const temEntrada = visiveis.some((d) => d.tipo === "Entrada");
+  const temTransf = visiveis.some((d) => d.tipo === "Transferencia");
 
   return (
-    <div className="rounded-md border border-hairline bg-surface">
-      <div className={`${ROW_GRID} border-b border-hairline px-3 py-2.5`}>
-        <span />
-        <span className="type-eyebrow text-ink-3">Nome</span>
-        <span className="type-eyebrow text-ink-3">Categoria</span>
-        <span className="type-eyebrow text-ink-3">Método</span>
-        <span className="type-eyebrow text-ink-3">Conta / Cartão</span>
-        <CabecalhoOrdenavel label="Data" campo="data" ordenacao={ordenacao} onClick={() => alternarOrdenacao("data")} />
-        <CabecalhoOrdenavel
-          label="Valor"
-          campo="valor"
-          ordenacao={ordenacao}
-          onClick={() => alternarOrdenacao("valor")}
-          align="right"
-        />
-        <span className="type-eyebrow text-center text-ink-3">Status</span>
-        <span className="type-eyebrow text-right text-ink-3">Ações</span>
-      </div>
+    <>
+      <FiltrosBar
+        filtros={filtros}
+        onChange={setFiltros}
+        ordenacao={ordenacao}
+        onOrdenar={setOrdenacao}
+        categorias={catOpts}
+        contasCartoes={ccOpts}
+        pessoas={pessoasOpts}
+        modoSelecao={false}
+        onToggleSelecao={() => {}}
+        totalVisivel={visiveis.length}
+      />
 
-      {itens.map((item) => item.node)}
-
-      {/* Fecho contábil: régua dupla e totais do recorte filtrado. */}
-      <div className="rule-ledger" aria-hidden="true" />
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-3 py-3">
-        <p className="type-caption text-ink-3">
-          {itens.length} {itens.length === 1 ? "lançamento" : "lançamentos"}
-        </p>
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          {saidas.length > 0 && (
-            <p className="type-label text-ink-2">
-              Saídas <span className="figures font-semibold text-ink">{formatCentsToBRL(totalSaidas)}</span>
-            </p>
-          )}
-          {entradas.length > 0 && (
-            <p className="type-label text-ink-2">
-              Entradas <span className="figures font-semibold text-pos">{formatCentsToBRL(totalEntradas)}</span>
-            </p>
-          )}
-          {saidas.length > 0 && entradas.length > 0 && (
-            <p className="type-label text-ink-2">
-              Resultado{" "}
-              <Amount cents={totalEntradas - totalSaidas} semantic="both" className="type-label font-semibold" />
-            </p>
-          )}
-          {transferencias.length > 0 && (
-            <p className="type-label text-ink-3">
-              Transferido <span className="figures font-semibold text-ink-2">{formatCentsToBRL(totalTransferencias)}</span>
-            </p>
-          )}
+      {visiveis.length === 0 ? (
+        <div className="rounded-md border border-hairline bg-surface p-8 text-center">
+          <p className="type-body text-ink-2">Nenhum lançamento com os filtros atuais.</p>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="rounded-md border border-hairline bg-surface">
+          <div className={`${ROW_GRID} border-b border-hairline px-3 py-2.5`}>
+            <span />
+            <CabecalhoOrdenavel label="Nome" campo="nome" ordenacao={ordenacao} onClick={() => alternarOrdenacao("nome")} />
+            <CabecalhoOrdenavel
+              label="Categoria"
+              campo="categoria"
+              ordenacao={ordenacao}
+              onClick={() => alternarOrdenacao("categoria")}
+            />
+            <span className="type-eyebrow text-ink-3">Método</span>
+            <span className="type-eyebrow text-ink-3">Conta / Cartão</span>
+            <CabecalhoOrdenavel label="Data" campo="data" ordenacao={ordenacao} onClick={() => alternarOrdenacao("data")} />
+            <CabecalhoOrdenavel
+              label="Valor"
+              campo="valor"
+              ordenacao={ordenacao}
+              onClick={() => alternarOrdenacao("valor")}
+              align="right"
+            />
+            <span className="type-eyebrow text-center text-ink-3">Status</span>
+            <span className="type-eyebrow text-right text-ink-3">Ações</span>
+          </div>
+
+          {visiveis.map((item) => item.node)}
+
+          {/* Fecho contábil: régua dupla e totais do recorte filtrado. */}
+          <div className="rule-ledger" aria-hidden="true" />
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-3 py-3">
+            <p className="type-caption text-ink-3">
+              {visiveis.length} {visiveis.length === 1 ? "lançamento" : "lançamentos"}
+            </p>
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              {temSaida && (
+                <p className="type-label text-ink-2">
+                  Saídas <span className="figures font-semibold text-ink">{formatCentsToBRL(totalSaidas)}</span>
+                </p>
+              )}
+              {temEntrada && (
+                <p className="type-label text-ink-2">
+                  Entradas <span className="figures font-semibold text-pos">{formatCentsToBRL(totalEntradas)}</span>
+                </p>
+              )}
+              {temSaida && temEntrada && (
+                <p className="type-label text-ink-2">
+                  Resultado{" "}
+                  <Amount cents={totalEntradas - totalSaidas} semantic="both" className="type-label font-semibold" />
+                </p>
+              )}
+              {temTransf && (
+                <p className="type-label text-ink-3">
+                  Transferido <span className="figures font-semibold text-ink-2">{formatCentsToBRL(totalTransf)}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
