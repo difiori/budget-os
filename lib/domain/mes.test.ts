@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  entradasAReceberDoMesCents,
   entradasDoMesCents,
   gastosDoMesCents,
   projecaoSaldoMeses,
   resolverContaEfetivaDaSaida,
   resumoContaMes,
+  saidasAPagarDoMesCents,
   saldoPrevistoCents,
 } from "./mes";
 import type { SaidaParaCalculo } from "./types";
@@ -57,12 +59,37 @@ describe("entradasDoMesCents (regra 4 — por data)", () => {
 });
 
 describe("saldoPrevistoCents", () => {
-  it("saldo_atual + entradas do mês - gastos do mês", () => {
+  it("saldo_atual + a receber - a pagar", () => {
     expect(saldoPrevistoCents(100000, 50000, 30000)).toBe(120000);
   });
 
   it("pode ficar negativo", () => {
     expect(saldoPrevistoCents(1000, 0, 5000)).toBe(-4000);
+  });
+});
+
+describe("saidasAPagarDoMesCents (só o que ainda não foi pago)", () => {
+  it("soma saídas do mês a pagar, mas ignora as já pagas (já estão no saldo)", () => {
+    const saidas = [
+      { ...saida({ total_cents: 10000 }), status: "A pagar" as const },
+      { ...saida({ total_cents: 7000 }), status: "Pago" as const },
+    ];
+    expect(saidasAPagarDoMesCents(CONTA, saidas, mesReferencia)).toBe(10000);
+  });
+
+  it("inclui saída do mês ainda não paga com outros status (ex.: Faturado)", () => {
+    const fatura = { ...saida({ total_cents: 25000 }), status: "Faturado" as const };
+    expect(saidasAPagarDoMesCents(CONTA, [fatura], mesReferencia)).toBe(25000);
+  });
+});
+
+describe("entradasAReceberDoMesCents (só o que ainda não entrou)", () => {
+  it("soma entradas do mês a receber, mas ignora as já recebidas (já estão no saldo)", () => {
+    const entradas = [
+      { quantia_cents: 500000, data: "2026-07-05", conta_destino_id: CONTA, status: "Não recebido" as const },
+      { quantia_cents: 300000, data: "2026-07-06", conta_destino_id: CONTA, status: "Recebido" as const },
+    ];
+    expect(entradasAReceberDoMesCents(CONTA, entradas, mesReferencia)).toBe(500000);
   });
 });
 
@@ -89,14 +116,15 @@ describe("projecaoSaldoMeses", () => {
     const contas = [{ id: CONTA, saldo_atual_cents: 100000 }];
     // 30000 de entrada e 10000 de saída em cada um dos dois meses da projeção.
     const entradas = [
-      { quantia_cents: 30000, data: "2026-07-05", conta_destino_id: CONTA },
-      { quantia_cents: 30000, data: "2026-08-05", conta_destino_id: CONTA },
+      { quantia_cents: 30000, data: "2026-07-05", conta_destino_id: CONTA, status: "Não recebido" as const },
+      { quantia_cents: 30000, data: "2026-08-05", conta_destino_id: CONTA, status: "Não recebido" as const },
     ];
     const base = {
       created_at: "2026-06-10T12:00:00.000Z",
       cartao_id: null,
       conta_id: CONTA,
       metodo: "Débito" as const,
+      status: "A pagar" as const,
     };
     const saidas = [
       { ...base, total_cents: 10000, data: "2026-07-05", vencimento: "2026-07-10" },
@@ -126,9 +154,30 @@ describe("resumoContaMes (regressão do bug: crédito não descontava do saldo p
       conta_id: null,
       vencimento: "2026-07-10",
       metodo: "Crédito" as const,
+      status: "A pagar" as const,
     };
     const resultado = resumoContaMes(conta, [compraNoCredito], [], mesReferencia, cartaoParaConta);
     expect(resultado.gastos).toBe(20000);
+    expect(resultado.aPagar).toBe(20000);
+    expect(resultado.saldoPrevisto).toBe(80000);
+  });
+
+  it("não desconta de novo a compra já paga — ela já está no saldo_atual", () => {
+    const conta = { id: CONTA, saldo_atual_cents: 80000 };
+    const cartaoParaConta = new Map([["cartao-1", CONTA]]);
+    const compraPaga = {
+      total_cents: 20000,
+      data: "2026-06-10",
+      created_at: "2026-06-10T12:00:00.000Z",
+      cartao_id: "cartao-1",
+      conta_id: null,
+      vencimento: "2026-07-10",
+      metodo: "Crédito" as const,
+      status: "Pago" as const,
+    };
+    const resultado = resumoContaMes(conta, [compraPaga], [], mesReferencia, cartaoParaConta);
+    expect(resultado.gastos).toBe(20000); // movimento bruto ainda aparece
+    expect(resultado.aPagar).toBe(0); // mas não pesa no previsto
     expect(resultado.saldoPrevisto).toBe(80000);
   });
 });

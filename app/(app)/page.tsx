@@ -30,21 +30,27 @@ function pessoaResumo(
   const entradasPessoa = entradas.filter((e) => e.pessoa === pessoa);
 
   const saldoAtualTotal = contasPessoa.reduce((sum, conta) => sum + conta.saldo_atual_cents, 0);
-  const saldoPrevistoTotal = contasPessoa.reduce((sum, conta) => {
-    const { saldoPrevisto } = resumoContaMes(
-      conta,
-      saidasPessoa,
-      entradasPessoa,
-      mesReferencia,
-      contaVinculadaPorCartaoId
-    );
-    return sum + saldoPrevisto;
-  }, 0);
+  const totais = contasPessoa.reduce(
+    (acc, conta) => {
+      const { saldoPrevisto, aReceber, aPagar } = resumoContaMes(
+        conta,
+        saidasPessoa,
+        entradasPessoa,
+        mesReferencia,
+        contaVinculadaPorCartaoId
+      );
+      acc.saldoPrevistoTotal += saldoPrevisto;
+      acc.aReceberTotal += aReceber;
+      acc.aPagarTotal += aPagar;
+      return acc;
+    },
+    { saldoPrevistoTotal: 0, aReceberTotal: 0, aPagarTotal: 0 }
+  );
 
   const saidasMes = gastosPorMes(saidasPessoa, [mesReferencia])[0];
   const entradasMes = entradasPorMes(entradasPessoa, [mesReferencia])[0];
 
-  return { saldoAtualTotal, saldoPrevistoTotal, saidasMes, entradasMes };
+  return { saldoAtualTotal, ...totais, saidasMes, entradasMes };
 }
 
 function painelHref(mes: CalendarDate) {
@@ -207,7 +213,9 @@ export default async function DashboardPage({
     (b.vencimento ?? b.data ?? b.created_at).localeCompare(a.vencimento ?? a.data ?? a.created_at)
   );
 
-  const resultadoMes = ativo.entradasMes - ativo.saidasMes;
+  // "A realizar" = a receber − a pagar; somado ao saldo atual, reconstrói o
+  // previsto exibido acima (não é o movimento bruto, que ignora o já liquidado).
+  const resultadoMes = ativo.aReceberTotal - ativo.aPagarTotal;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
@@ -236,23 +244,24 @@ export default async function DashboardPage({
 
           <div className="rule-ledger" aria-hidden="true" />
 
-          {/* No mobile vira linhas de extrato (rótulo à esquerda, valor à
-              direita); em telas maiores, três colunas. */}
+          {/* Reconcilia o previsto a partir do saldo real: atual + a receber −
+              a pagar. No mobile vira linhas de extrato; em telas maiores, três
+              colunas. */}
           <dl className="grid gap-2.5 sm:grid-cols-3 sm:gap-4">
             <div className="flex items-baseline justify-between gap-3 sm:block">
-              <dt className="type-caption text-ink-3">Entradas do mês</dt>
+              <dt className="type-caption text-ink-3">A receber no mês</dt>
               <dd className="type-body font-medium sm:mt-0.5">
-                <Amount cents={ativo.entradasMes} semantic="none" className="text-ink" />
+                <Amount cents={ativo.aReceberTotal} semantic="none" className="text-ink" />
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3 sm:block">
-              <dt className="type-caption text-ink-3">Saídas do mês</dt>
+              <dt className="type-caption text-ink-3">A pagar no mês</dt>
               <dd className="type-body font-medium sm:mt-0.5">
-                <Amount cents={ativo.saidasMes} semantic="none" className="text-ink" />
+                <Amount cents={ativo.aPagarTotal} semantic="none" className="text-ink" />
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3 sm:block">
-              <dt className="type-caption text-ink-3">Resultado</dt>
+              <dt className="type-caption text-ink-3">Resultado a realizar</dt>
               <dd className="type-body font-medium sm:mt-0.5">
                 <Amount cents={resultadoMes} semantic="both" />
               </dd>

@@ -249,7 +249,19 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10">
       <div className="flex flex-col gap-6">
       <Card variant="raised" className="flex flex-col gap-1 p-6">
-        <label htmlFor="valor" className="type-eyebrow text-ink-3">
+        <label htmlFor="nome" className="type-eyebrow text-ink-3">
+          Nome
+        </label>
+        <input
+          id="nome"
+          name="nome"
+          type="text"
+          placeholder="Nome do lançamento"
+          required
+          defaultValue=""
+          className="type-headline w-full border-none bg-transparent text-ink outline-none placeholder:text-ink-3/50 focus-visible:outline-none"
+        />
+        <label htmlFor="valor" className="type-eyebrow mt-3 block border-t border-hairline pt-3.5 text-ink-3">
           Valor
         </label>
         <div className="flex items-baseline gap-2">
@@ -275,18 +287,6 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
             className="type-hero figures w-full border-none bg-transparent text-ink outline-none placeholder:text-ink-3/50 focus-visible:outline-none"
           />
         </div>
-        <label htmlFor="nome" className="sr-only">
-          Nome do lançamento
-        </label>
-        <input
-          id="nome"
-          name="nome"
-          type="text"
-          placeholder="Nome do lançamento"
-          required
-          defaultValue=""
-          className="type-body mt-3 w-full border-t border-hairline bg-transparent pt-3.5 text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
-        />
       </Card>
 
       <GrupoDeEscolha label="Tipo">
@@ -301,7 +301,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
             {contas.map((c) => (
               <Chip
                 key={c.id}
-                label={`${c.nome} (${c.dono})`}
+                label={c.nome}
                 selected={deContaId === c.id}
                 onClick={() => {
                   setDeContaId(c.id);
@@ -316,7 +316,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
               .map((c) => (
                 <Chip
                   key={c.id}
-                  label={`${c.nome} (${c.dono})`}
+                  label={c.nome}
                   selected={paraContaId === c.id}
                   onClick={() => setParaContaId(c.id)}
                 />
@@ -343,7 +343,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
           {opcoesDestino.map((o) => (
             <Chip
               key={o.id}
-              label={`${o.nome} (${o.dono})`}
+              label={o.nome}
               selected={destinoId === o.id}
               onClick={() => handleDestinoChange(o.id)}
             />
