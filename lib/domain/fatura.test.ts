@@ -100,12 +100,21 @@ describe("limiteComprometidoCents", () => {
     expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(2000);
   });
 
-  it("conta recorrente e avulsa do ciclo atual (a vencer e do mês)", () => {
+  it("recorrente da fatura a vencer (mês anterior) conta; da fatura do mês, não", () => {
     const saidas = [
-      saidaComStatus({ total_cents: 3000, data: "2026-06-10", origem: "Recorrente" }), // a vencer
-      saidaComStatus({ total_cents: 3000, data: "2026-07-10", origem: "Manual" }), // do mês
+      saidaComStatus({ total_cents: 3000, data: "2026-06-10", origem: "Recorrente" }), // a vencer — pesa (anuidade a pagar)
+      saidaComStatus({ total_cents: 5000, data: "2026-07-10", origem: "Recorrente" }), // do mês — não pesa ainda
     ];
-    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(6000);
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(3000);
+  });
+
+  it("na fatura do mês conta avulsa e parcela, mas não recorrente", () => {
+    const saidas = [
+      saidaComStatus({ total_cents: 3000, data: "2026-07-10", origem: "Manual" }), // do mês, avulsa — pesa
+      saidaComStatus({ total_cents: 1000, data: "2026-07-15", origem: "Parcelamento" }), // do mês, parcela — pesa
+      saidaComStatus({ total_cents: 5000, data: "2026-07-20", origem: "Recorrente" }), // do mês, recorrente — não
+    ];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(4000);
   });
 });
 

@@ -32,12 +32,15 @@ export function faturaAtualCents(
  * - **Sem passado**: ignora compras anteriores à fatura a vencer (mês anterior
  *   ao de referência). Lançamento vencido nunca quitado é dado antigo, não
  *   limite em uso.
- * - **Ciclo atual conta tudo**: as faturas a vencer (mês anterior) e do mês
- *   somam integralmente — é o que está/vai cair no cartão agora.
+ * - **Fatura a vencer (mês anterior)**: conta tudo, inclusive recorrentes
+ *   (anuidade, assinatura). É a fatura fechada que vence agora — dívida real
+ *   enquanto o botão "marcar como paga" não é pressionado.
+ * - **Fatura do mês (atual)**: conta avulsas e parcelamentos, mas **não** as
+ *   recorrentes — elas ainda não caíram no cartão, então reservá-las agora
+ *   inflaria o "excedido" antes da hora. Passam a pesar quando este mês vira o
+ *   "a vencer" (mês seguinte) ou quando a fatura é paga (aí são debitadas).
  * - **No futuro, só parcela**: dos meses à frente, apenas compras parceladas
- *   (`Parcelamento`) pesam — é a única dívida já assumida. Recorrências
- *   (assinatura, anuidade) e compras avulsas lançadas no futuro não
- *   comprometem o limite de hoje; só quando chegam ao ciclo atual.
+ *   (`Parcelamento`) pesam — é a única dívida já assumida.
  */
 export function limiteComprometidoCents(
   cartaoId: string,
@@ -54,7 +57,8 @@ export function limiteComprometidoCents(
       const ref = indiceMes(dataParaCalculo(s));
       if (ref < inicioCiclo) return false; // sem passado
       if (ref > fimCicloAtual) return s.origem === "Parcelamento"; // futuro: só parcela
-      return true; // ciclo atual (a vencer + do mês): tudo
+      if (ref === fimCicloAtual) return s.origem !== "Recorrente"; // do mês: avulsa + parcela (recorrente não)
+      return true; // a vencer (mês anterior): tudo, inclusive recorrente
     })
     .reduce((sum, s) => sum + s.total_cents, 0);
 }
