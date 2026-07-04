@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { formatCentsToBRL } from "@/lib/domain/money";
@@ -53,7 +54,7 @@ export default async function ContasPage({
     { data: contas },
     { data: entradas },
     { data: saidasDebito },
-    { data: saidasCartao },
+    saidasCartao,
     { data: cartoes },
     { data: metas },
   ] = await Promise.all([
@@ -70,10 +71,16 @@ export default async function ContasPage({
       .not("conta_id", "is", null)
       .gte("vencimento", inicioMes)
       .lt("vencimento", fimMes),
-    supabase
-      .from("saida")
-      .select("id, total_cents, data, created_at, cartao_id, status")
-      .not("cartao_id", "is", null),
+    // Paginado: as compras de cartão (sem recorte de data, pois alimentam
+    // fatura/limite) passam de 1000 linhas e seriam truncadas.
+    fetchAllRows<Pick<Saida, "id" | "total_cents" | "data" | "created_at" | "cartao_id" | "status">>((from, to) =>
+      supabase
+        .from("saida")
+        .select("id, total_cents, data, created_at, cartao_id, status")
+        .not("cartao_id", "is", null)
+        .order("id")
+        .range(from, to)
+    ),
     supabase.from("cartao").select("id, nome, conta_vinculada_id"),
     metasQuery,
   ]);
@@ -84,10 +91,7 @@ export default async function ContasPage({
     "id" | "quantia_cents" | "valor_recebido_cents" | "status" | "conta_destino_id" | "data"
   >[];
   const todasSaidasDebito = (saidasDebito ?? []) as Pick<Saida, "id" | "total_cents" | "conta_id" | "vencimento">[];
-  const todasSaidasCartao = (saidasCartao ?? []) as Pick<
-    Saida,
-    "id" | "total_cents" | "data" | "created_at" | "cartao_id" | "status"
-  >[];
+  const todasSaidasCartao = saidasCartao;
   const todosCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "conta_vinculada_id">[];
   const todasMetas = (metas ?? []) as MetaPoupanca[];
   const contaPorId = new Map(todasContas.map((c) => [c.id, c]));

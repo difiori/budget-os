@@ -9,6 +9,7 @@ import { TrendChart } from "@/components/dashboard/trend-chart";
 import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
@@ -139,18 +140,28 @@ export default async function DashboardPage({
 
   const [
     { data: contas },
-    { data: saidas },
-    { data: entradas },
+    saidasTodas,
+    entradasTodas,
     { data: categorias },
     { data: cartoes },
     { data: recentesDiego },
     { data: recentesVitor },
   ] = await Promise.all([
     supabase.from("conta").select("id, nome, dono, saldo_atual_cents"),
-    supabase.from("saida").select(saidaColunasRecentes),
-    supabase
-      .from("entrada")
-      .select("id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"),
+    // Paginado: a tabela `saida` passa de 1000 linhas, e o limite padrão do
+    // PostgREST truncaria silenciosamente o cálculo do saldo previsto.
+    fetchAllRows<Saida>((from, to) =>
+      supabase.from("saida").select(saidaColunasRecentes).order("id").range(from, to)
+    ),
+    fetchAllRows<Entrada>((from, to) =>
+      supabase
+        .from("entrada")
+        .select(
+          "id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"
+        )
+        .order("id")
+        .range(from, to)
+    ),
     supabase.from("categoria").select("id, nome, dono"),
     supabase.from("cartao").select("id, conta_vinculada_id"),
     // Só as saídas com vencimento no mês em foco — nada de outros meses
@@ -174,8 +185,8 @@ export default async function DashboardPage({
   ]);
 
   const todasContas = (contas ?? []) as Conta[];
-  const todasSaidas = (saidas ?? []) as Saida[];
-  const todasEntradas = (entradas ?? []) as Entrada[];
+  const todasSaidas = saidasTodas;
+  const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
   const contaVinculadaPorCartaoId = new Map(
     ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
@@ -213,10 +224,6 @@ export default async function DashboardPage({
     (b.vencimento ?? b.data ?? b.created_at).localeCompare(a.vencimento ?? a.data ?? a.created_at)
   );
 
-  // "A realizar" = a receber − a pagar; somado ao saldo atual, reconstrói o
-  // previsto exibido acima (não é o movimento bruto, que ignora o já liquidado).
-  const resultadoMes = ativo.aReceberTotal - ativo.aPagarTotal;
-
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
       <PageHeader title="Painel" subtitle={`Vendo como ${contaAtiva}`}>
@@ -244,10 +251,10 @@ export default async function DashboardPage({
 
           <div className="rule-ledger" aria-hidden="true" />
 
-          {/* Reconcilia o previsto a partir do saldo real: atual + a receber −
-              a pagar. No mobile vira linhas de extrato; em telas maiores, três
-              colunas. */}
-          <dl className="grid gap-2.5 sm:grid-cols-3 sm:gap-4">
+          {/* O previsto sai do saldo real + o que ainda falta acontecer no mês:
+              saldo atual + a receber − a pagar. No mobile vira linhas de
+              extrato; em telas maiores, duas colunas. */}
+          <dl className="grid gap-2.5 sm:grid-cols-2 sm:gap-4">
             <div className="flex items-baseline justify-between gap-3 sm:block">
               <dt className="type-caption text-ink-3">A receber no mês</dt>
               <dd className="type-body font-medium sm:mt-0.5">
@@ -258,12 +265,6 @@ export default async function DashboardPage({
               <dt className="type-caption text-ink-3">A pagar no mês</dt>
               <dd className="type-body font-medium sm:mt-0.5">
                 <Amount cents={ativo.aPagarTotal} semantic="none" className="text-ink" />
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3 sm:block">
-              <dt className="type-caption text-ink-3">Resultado a realizar</dt>
-              <dd className="type-body font-medium sm:mt-0.5">
-                <Amount cents={resultadoMes} semantic="both" />
               </dd>
             </div>
           </dl>
