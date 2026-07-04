@@ -327,3 +327,101 @@ export async function excluirTransferencia(input: {
   revalidarTudo();
   return { error: null };
 }
+
+type LoteResult = { error: string | null; feitas: number };
+
+/** Marca várias saídas como Pago de uma vez, debitando a conta-alvo de cada
+ * uma que ainda não estava paga. Só mexe no status — não toca em data,
+ * vencimento nem categoria (ao contrário de `atualizarSaida`). */
+export async function marcarSaidasComoPagas(ids: string[]): Promise<LoteResult> {
+  if (ids.length === 0) return { error: null, feitas: 0 };
+  const supabase = await createClient();
+  const editadoPor = await editorAutenticado(supabase);
+  if (!editadoPor) return { error: "Não foi possível identificar quem está editando.", feitas: 0 };
+
+  const { data: rows, error } = await supabase
+    .from("saida")
+    .select("id, total_cents, metodo, conta_id, cartao_id, status")
+    .in("id", ids);
+  if (error) return { error: error.message, feitas: 0 };
+
+  let feitas = 0;
+  for (const s of (rows ?? []) as {
+    id: string;
+    total_cents: number;
+    metodo: MetodoPagamento;
+    conta_id: string | null;
+    cartao_id: string | null;
+    status: SaidaStatus;
+  }[]) {
+    if (s.status === "Pago") continue;
+    const { error: upErr } = await supabase
+      .from("saida")
+      .update({ status: "Pago", editado_por: editadoPor, atualizado_em: new Date().toISOString() })
+      .eq("id", s.id);
+    if (upErr) return { error: upErr.message, feitas };
+    const contaAlvo = await contaAlvoDaSaida(supabase, s.metodo, s.conta_id, s.cartao_id);
+    if (contaAlvo) {
+      const { error: rpcErr } = await supabase.rpc("debitar_conta", { p_conta_id: contaAlvo, p_valor_cents: s.total_cents });
+      if (rpcErr) return { error: `Saída marcada, mas o saldo não foi ajustado: ${rpcErr.message}`, feitas };
+    }
+    feitas++;
+  }
+  revalidarTudo();
+  return { error: null, feitas };
+}
+
+/** Marca várias entradas como Recebido, creditando a conta de destino de cada
+ * uma que ainda não estava recebida. */
+export async function marcarEntradasComoRecebidas(ids: string[]): Promise<LoteResult> {
+  if (ids.length === 0) return { error: null, feitas: 0 };
+  const supabase = await createClient();
+  const editadoPor = await editorAutenticado(supabase);
+  if (!editadoPor) return { error: "Não foi possível identificar quem está editando.", feitas: 0 };
+
+  const { data: rows, error } = await supabase
+    .from("entrada")
+    .select("id, quantia_cents, conta_destino_id, status")
+    .in("id", ids);
+  if (error) return { error: error.message, feitas: 0 };
+
+  let feitas = 0;
+  for (const e of (rows ?? []) as {
+    id: string;
+    quantia_cents: number;
+    conta_destino_id: string;
+    status: EntradaStatus;
+  }[]) {
+    if (e.status === "Recebido") continue;
+    const { error: upErr } = await supabase
+      .from("entrada")
+      .update({ status: "Recebido", editado_por: editadoPor, atualizado_em: new Date().toISOString() })
+      .eq("id", e.id);
+    if (upErr) return { error: upErr.message, feitas };
+    const { error: rpcErr } = await supabase.rpc("creditar_conta", {
+      p_conta_id: e.conta_destino_id,
+      p_valor_cents: e.quantia_cents,
+    });
+    if (rpcErr) return { error: `Entrada marcada, mas o saldo não foi ajustado: ${rpcErr.message}`, feitas };
+    feitas++;
+  }
+  revalidarTudo();
+  return { error: null, feitas };
+}
+
+/** Troca a categoria de várias saídas de uma vez (não afeta saldo). */
+export async function definirCategoriaEmLote(ids: string[], categoriaId: string | null): Promise<ActionResult> {
+  if (ids.length === 0) return { error: null };
+  const supabase = await createClient();
+  const editadoPor = await editorAutenticado(supabase);
+  if (!editadoPor) return { error: "Não foi possível identificar quem está editando." };
+
+  const { error } = await supabase
+    .from("saida")
+    .update({ categoria_id: categoriaId, editado_por: editadoPor, atualizado_em: new Date().toISOString() })
+    .in("id", ids);
+  if (error) return { error: error.message };
+
+  revalidarTudo();
+  return { error: null };
+}
