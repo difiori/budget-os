@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { criarLancamento, type CriarLancamentoState } from "./actions";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { addMonths, parseCalendarDate } from "@/lib/domain/calendar-date";
@@ -85,6 +85,18 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
   const [formKey, setFormKey] = useState(0);
   const [valorInput, setValorInput] = useState("");
   const [dataInput, setDataInput] = useState(hojeISO());
+
+  // A calculadora global manda o resultado pra cá pelo botão "Usar valor".
+  useEffect(() => {
+    function onUsarValor(event: Event) {
+      const cents = (event as CustomEvent<{ cents: number }>).detail?.cents;
+      if (typeof cents === "number") {
+        setValorInput(formatCentsToBRL(cents).replace("R$", "").trim());
+      }
+    }
+    window.addEventListener("budget:usar-valor", onUsarValor);
+    return () => window.removeEventListener("budget:usar-valor", onUsarValor);
+  }, []);
 
   // Saída/entrada mostram só as contas/cartões da pessoa ativa do menu;
   // transferência (mais abaixo) usa todas as contas do casal.
