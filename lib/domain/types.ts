@@ -46,6 +46,7 @@ export interface Categoria {
   id: string;
   nome: string;
   dono: CategoriaDono;
+  meta_mensal_cents: number | null;
 }
 
 export interface Saida {
@@ -65,6 +66,18 @@ export interface Saida {
   created_at: string;
   editado_por?: Pessoa;
   atualizado_em?: string;
+}
+
+export interface MetaPoupanca {
+  id: string;
+  nome: string;
+  valor_alvo_cents: number;
+  /** Só usado quando a meta não está vinculada a uma conta — atualizado manualmente. */
+  valor_atual_cents: number;
+  conta_id: string | null;
+  dono: CategoriaDono;
+  data_alvo: string | null;
+  created_at: string;
 }
 
 export interface Transferencia {

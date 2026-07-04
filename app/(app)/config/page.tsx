@@ -12,7 +12,7 @@ export default async function ConfigPage() {
       .from("cartao")
       .select("id, nome, dono, tipo, limite_cents, dia_fechamento, dia_vencimento, conta_vinculada_id")
       .order("nome"),
-    supabase.from("categoria").select("id, nome, dono").order("nome"),
+    supabase.from("categoria").select("id, nome, dono, meta_mensal_cents").order("nome"),
   ]);
 
   return (

@@ -3,8 +3,8 @@
 /* ------------------------------------------------------------------------ */
 /* Identidade visual — "extrato de banco privado".                           */
 /*                                                                           */
-/* Papel mineral, tinta verde-garrafa, serif editorial (Newsreader) apenas   */
-/* em títulos e valores-destaque. Cor nunca decora: verde = dinheiro         */
+/* Papel mineral, tinta verde-garrafa, Poppins em todo o projeto (display e  */
+/* interface). Cor nunca decora: verde = dinheiro                           */
 /* positivo, granada = dinheiro negativo, âmbar = atenção. Diego e Vitor     */
 /* têm matizes próprios (ardósia / bronze) usados só em tags e pontos.       */
 /* Assinatura estrutural: régua contábil dupla sob os totais.                */
@@ -16,7 +16,7 @@
   --color-raised: #ffffff;
   --color-ink: #1c2420;
   --color-ink-2: #5c665f;
-  --color-ink-3: #8b948d;
+  --color-ink-3: #656d66;
   --color-hairline: #e2e4dc;
   --color-hairline-strong: #c6cabd;
 
@@ -58,7 +58,7 @@
   --color-raised: #1e241f;
   --color-ink: #e9ece7;
   --color-ink-2: #a4ada5;
-  --color-ink-3: #707970;
+  --color-ink-3: #7a827b;
   --color-hairline: rgba(233, 236, 231, 0.1);
   --color-hairline-strong: rgba(233, 236, 231, 0.24);
 
@@ -157,8 +157,8 @@ body {
 }
 
 /* ------------------------------------------------------------------------ */
-/* Escala tipográfica — Newsreader (display, valores-destaque) e Hanken      */
-/* Grotesk (interface). Números de tabela sempre tabulares.                  */
+/* Escala tipográfica — Poppins em tudo (display, valores-destaque e         */
+/* interface). Números de tabela sempre tabulares.                          */
 /* ------------------------------------------------------------------------ */
 
 .type-hero {

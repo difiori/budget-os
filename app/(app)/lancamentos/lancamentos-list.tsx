@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Amount } from "@/components/ui/amount";
 import { PersonDot } from "@/components/ui/person-tag";
 import { inputClasses } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
+import { nomeComParcela, nomeSemParcela } from "@/lib/domain/parcelamento";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import {
   atualizarEntrada,
@@ -170,15 +172,19 @@ function SaidaRow({
   categoriaNome,
   destinoNome,
   onRemovido,
+  onRestaurado,
 }: {
   saida: Saida;
   categorias: Categoria[];
   categoriaNome: string;
   destinoNome: string;
   onRemovido: (id: string) => void;
+  onRestaurado: (saida: Saida) => void;
 }) {
   const [editando, setEditando] = useState(false);
-  const [nome, setNome] = useState(saida.nome);
+  // Pré-preenche com o nome base (sem o sufixo "NN/NN"), que a parcela já
+  // ocupa no campo próprio — evita salvar o número duplicado no nome.
+  const [nome, setNome] = useState(nomeSemParcela(saida.nome, saida.parcela));
   const [valor, setValor] = useState(centsToInputValue(saida.total_cents));
   const [data, setData] = useState(isoParaInput(saida.data));
   const [vencimento, setVencimento] = useState(isoParaInput(saida.vencimento));
@@ -187,6 +193,7 @@ function SaidaRow({
   const [status, setStatus] = useState<SaidaStatus>(saida.status);
   const [erro, setErro] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   const categoriasFiltradas = categoriasParaPessoa(categorias, saida.pessoa);
 
@@ -223,22 +230,32 @@ function SaidaRow({
     });
   }
 
+  /** Remoção otimista com desfazer: some da lista na hora, e a exclusão real
+   * só acontece no servidor se a janela do toast expirar sem "Desfazer". */
   function remover() {
-    if (!confirm(`Excluir "${saida.nome}"?`)) return;
-    startTransition(async () => {
-      const { error } = await excluirSaida({
-        id: saida.id,
-        status: saida.status,
-        totalCents: saida.total_cents,
-        metodo: saida.metodo,
-        contaId: saida.conta_id,
-        cartaoId: saida.cartao_id,
+    onRemovido(saida.id);
+    const timeoutId = setTimeout(() => {
+      startTransition(async () => {
+        const { error } = await excluirSaida({
+          id: saida.id,
+          status: saida.status,
+          totalCents: saida.total_cents,
+          metodo: saida.metodo,
+          contaId: saida.conta_id,
+          cartaoId: saida.cartao_id,
+        });
+        if (error) {
+          onRestaurado(saida);
+          toast(`Não foi possível excluir "${saida.nome}": ${error}`);
+        }
       });
-      if (error) {
-        setErro(error);
-        return;
-      }
-      onRemovido(saida.id);
+    }, 5000);
+    toast(`"${saida.nome}" excluído.`, {
+      actionLabel: "Desfazer",
+      onAction: () => {
+        clearTimeout(timeoutId);
+        onRestaurado(saida);
+      },
     });
   }
 
@@ -318,10 +335,7 @@ function SaidaRow({
     <>
       <LinhaBase>
         <PersonDot pessoa={saida.pessoa} />
-        <span className="type-body truncate text-ink">
-          {saida.nome}
-          {saida.parcela ? <span className="text-ink-3"> · {saida.parcela}</span> : ""}
-        </span>
+        <span className="type-body truncate text-ink">{nomeComParcela(saida.nome, saida.parcela)}</span>
         <span className="type-caption truncate text-ink-2">{categoriaNome}</span>
         <span className="type-caption truncate text-ink-2">{saida.metodo}</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
@@ -352,7 +366,7 @@ function SaidaRow({
       </LinhaBase>
       <CartaoColapsado
         pessoa={saida.pessoa}
-        titulo={saida.nome + (saida.parcela ? ` · ${saida.parcela}` : "")}
+        titulo={nomeComParcela(saida.nome, saida.parcela)}
         subtitulo={`${categoriaNome} · ${saida.metodo} · ${destinoNome} · ${formatDataCurta(saida.vencimento)}`}
         valorCents={saida.total_cents}
         valorClassName="text-ink"
@@ -370,11 +384,13 @@ function EntradaRow({
   destinoNome,
   contas,
   onRemovido,
+  onRestaurado,
 }: {
   entrada: Entrada;
   destinoNome: string;
   contas: { id: string; nome: string }[];
   onRemovido: (id: string) => void;
+  onRestaurado: (entrada: Entrada) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(entrada.nome);
@@ -384,6 +400,7 @@ function EntradaRow({
   const [contaDestinoId, setContaDestinoId] = useState(entrada.conta_destino_id);
   const [erro, setErro] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   function salvar() {
     let quantiaCents: number;
@@ -415,19 +432,27 @@ function EntradaRow({
   }
 
   function remover() {
-    if (!confirm(`Excluir "${entrada.nome}"?`)) return;
-    startTransition(async () => {
-      const { error } = await excluirEntrada({
-        id: entrada.id,
-        status: entrada.status,
-        quantiaCents: entrada.quantia_cents,
-        contaDestinoId: entrada.conta_destino_id,
+    onRemovido(entrada.id);
+    const timeoutId = setTimeout(() => {
+      startTransition(async () => {
+        const { error } = await excluirEntrada({
+          id: entrada.id,
+          status: entrada.status,
+          quantiaCents: entrada.quantia_cents,
+          contaDestinoId: entrada.conta_destino_id,
+        });
+        if (error) {
+          onRestaurado(entrada);
+          toast(`Não foi possível excluir "${entrada.nome}": ${error}`);
+        }
       });
-      if (error) {
-        setErro(error);
-        return;
-      }
-      onRemovido(entrada.id);
+    }, 5000);
+    toast(`"${entrada.nome}" excluído.`, {
+      actionLabel: "Desfazer",
+      onAction: () => {
+        clearTimeout(timeoutId);
+        onRestaurado(entrada);
+      },
     });
   }
 
@@ -551,11 +576,13 @@ function TransferenciaRow({
   deNome,
   paraNome,
   onRemovido,
+  onRestaurado,
 }: {
   transferencia: Transferencia;
   deNome: string;
   paraNome: string;
   onRemovido: (id: string) => void;
+  onRestaurado: (transferencia: Transferencia) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(transferencia.nome);
@@ -563,6 +590,7 @@ function TransferenciaRow({
   const [data, setData] = useState(isoParaInput(transferencia.data));
   const [erro, setErro] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const toast = useToast();
 
   const rota = `${deNome} → ${paraNome}`;
 
@@ -594,19 +622,27 @@ function TransferenciaRow({
   }
 
   function remover() {
-    if (!confirm(`Excluir a transferência "${transferencia.nome}"?`)) return;
-    startTransition(async () => {
-      const { error } = await excluirTransferencia({
-        id: transferencia.id,
-        valorCents: transferencia.valor_cents,
-        deContaId: transferencia.de_conta_id,
-        paraContaId: transferencia.para_conta_id,
+    onRemovido(transferencia.id);
+    const timeoutId = setTimeout(() => {
+      startTransition(async () => {
+        const { error } = await excluirTransferencia({
+          id: transferencia.id,
+          valorCents: transferencia.valor_cents,
+          deContaId: transferencia.de_conta_id,
+          paraContaId: transferencia.para_conta_id,
+        });
+        if (error) {
+          onRestaurado(transferencia);
+          toast(`Não foi possível excluir "${transferencia.nome}": ${error}`);
+        }
       });
-      if (error) {
-        setErro(error);
-        return;
-      }
-      onRemovido(transferencia.id);
+    }, 5000);
+    toast(`"${transferencia.nome}" excluído.`, {
+      actionLabel: "Desfazer",
+      onAction: () => {
+        clearTimeout(timeoutId);
+        onRestaurado(transferencia);
+      },
     });
   }
 
@@ -752,6 +788,7 @@ export function LancamentosList({
           categoriaNome={categoriaPorId.get(s.categoria_id ?? "") ?? "Sem categoria"}
           destinoNome={destinoDaSaida(s)}
           onRemovido={(id) => setSaidas((prev) => prev.filter((s) => s.id !== id))}
+          onRestaurado={(saida) => setSaidas((prev) => [...prev, saida])}
         />
       ),
     }));
@@ -766,6 +803,7 @@ export function LancamentosList({
           destinoNome={contaPorId.get(e.conta_destino_id) ?? "—"}
           contas={contas}
           onRemovido={(id) => setEntradas((prev) => prev.filter((e) => e.id !== id))}
+          onRestaurado={(entrada) => setEntradas((prev) => [...prev, entrada])}
         />
       ),
     }));
@@ -780,6 +818,7 @@ export function LancamentosList({
           deNome={contaPorId.get(t.de_conta_id) ?? "—"}
           paraNome={contaPorId.get(t.para_conta_id) ?? "—"}
           onRemovido={(id) => setTransferencias((prev) => prev.filter((t) => t.id !== id))}
+          onRestaurado={(transferencia) => setTransferencias((prev) => [...prev, transferencia])}
         />
       ),
     }));

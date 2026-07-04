@@ -64,7 +64,7 @@ export default async function CartoesPage({
 
   const views: CartaoView[] = todosCartoes.map((cartao) => {
     const saidasCartao = todasSaidas.filter((s) => s.cartao_id === cartao.id);
-    const comprometido = limiteComprometidoCents(cartao.id, saidasCartao);
+    const comprometido = limiteComprometidoCents(cartao.id, saidasCartao, mesReferencia);
 
     // Fatura "a vencer": compras do mês anterior — fecharam e vencem agora.
     const comprasAVencer = saidasCartao

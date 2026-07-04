@@ -1,6 +1,11 @@
-import { type CalendarDate, isSameMonth } from "./calendar-date";
+import { addMonths, type CalendarDate, isSameMonth } from "./calendar-date";
 import { dataParaCalculo } from "./data-fallback";
-import type { SaidaParaCalculo, SaidaStatus } from "./types";
+import type { SaidaOrigem, SaidaParaCalculo, SaidaStatus } from "./types";
+
+/** Índice contínuo de mês (ano*12 + mês) — pra comparar meses por ordem. */
+function indiceMes(d: CalendarDate): number {
+  return d.year * 12 + (d.month - 1);
+}
 
 /**
  * Regras 1-2: ciclo de fatura = mês-calendário (fecha no último dia do mês,
@@ -20,18 +25,37 @@ export function faturaAtualCents(
 }
 
 /**
- * Limite comprometido = soma de `total_cents` de todas as saídas do cartão
- * ainda não pagas, em qualquer mês (não só o ciclo atual). Uma compra
- * parcelada compromete o limite pelo valor total desde o ato da compra —
- * cada parcela ainda não paga soma integralmente aqui, não só a do mês.
+ * Limite comprometido = soma de `total_cents` das saídas do cartão ainda não
+ * pagas que pesam no limite disponível hoje. Janela por mês da compra
+ * (`dataParaCalculo`, mesmo critério das faturas do card):
+ *
+ * - **Sem passado**: ignora compras anteriores à fatura a vencer (mês anterior
+ *   ao de referência). Lançamento vencido nunca quitado é dado antigo, não
+ *   limite em uso.
+ * - **Ciclo atual conta tudo**: as faturas a vencer (mês anterior) e do mês
+ *   somam integralmente — é o que está/vai cair no cartão agora.
+ * - **No futuro, só parcela**: dos meses à frente, apenas compras parceladas
+ *   (`Parcelamento`) pesam — é a única dívida já assumida. Recorrências
+ *   (assinatura, anuidade) e compras avulsas lançadas no futuro não
+ *   comprometem o limite de hoje; só quando chegam ao ciclo atual.
  */
 export function limiteComprometidoCents(
   cartaoId: string,
-  saidas: (SaidaParaCalculo & { status: SaidaStatus })[]
+  saidas: (SaidaParaCalculo & { status: SaidaStatus; origem: SaidaOrigem })[],
+  mesReferencia: CalendarDate
 ): number {
+  const inicioCiclo = indiceMes(addMonths(mesReferencia, -1)); // fatura a vencer
+  const fimCicloAtual = indiceMes(mesReferencia); // fatura do mês
+
   return saidas
     .filter((s) => s.cartao_id === cartaoId)
     .filter((s) => s.status !== "Pago")
+    .filter((s) => {
+      const ref = indiceMes(dataParaCalculo(s));
+      if (ref < inicioCiclo) return false; // sem passado
+      if (ref > fimCicloAtual) return s.origem === "Parcelamento"; // futuro: só parcela
+      return true; // ciclo atual (a vencer + do mês): tudo
+    })
     .reduce((sum, s) => sum + s.total_cents, 0);
 }
 

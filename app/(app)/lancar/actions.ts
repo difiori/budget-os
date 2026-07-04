@@ -51,8 +51,9 @@ export async function criarLancamento(
   } catch {
     return { status: "error", message: "Valor inválido." };
   }
-  if (totalCents <= 0) {
-    return { status: "error", message: "O valor precisa ser maior que zero." };
+  // Negativo é permitido (ex.: adiantar/abater um pagamento); só zero não faz sentido.
+  if (totalCents === 0) {
+    return { status: "error", message: "O valor não pode ser zero." };
   }
 
   const dataCompra = parseCalendarDate(dataInput);

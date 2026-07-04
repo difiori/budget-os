@@ -49,6 +49,7 @@ export async function criarConta(formData: FormData): Promise<ActionResult> {
   revalidatePath("/config");
   revalidatePath("/");
   revalidatePath("/mes");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -76,6 +77,7 @@ export async function atualizarConta(id: string, formData: FormData): Promise<Ac
   revalidatePath("/config");
   revalidatePath("/");
   revalidatePath("/mes");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -87,6 +89,7 @@ export async function excluirConta(id: string): Promise<ActionResult> {
   revalidatePath("/config");
   revalidatePath("/");
   revalidatePath("/mes");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -125,6 +128,7 @@ export async function criarCartao(formData: FormData): Promise<ActionResult> {
   revalidatePath("/config");
   revalidatePath("/cartoes");
   revalidatePath("/lancar");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -164,6 +168,7 @@ export async function atualizarCartao(id: string, formData: FormData): Promise<A
   revalidatePath("/config");
   revalidatePath("/cartoes");
   revalidatePath("/lancar");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -174,6 +179,7 @@ export async function excluirCartao(id: string): Promise<ActionResult> {
 
   revalidatePath("/config");
   revalidatePath("/cartoes");
+  revalidatePath("/contas");
   return { error: null };
 }
 
@@ -182,32 +188,53 @@ export async function excluirCartao(id: string): Promise<ActionResult> {
 export async function criarCategoria(formData: FormData): Promise<ActionResult> {
   const nome = String(formData.get("nome") ?? "").trim();
   const dono = String(formData.get("dono") ?? "") as CategoriaDono;
+  const metaInput = String(formData.get("metaMensal") ?? "");
 
   if (!nome) return { error: "Informe o nome da categoria." };
 
+  let metaMensalCents: number | null;
+  try {
+    metaMensalCents = parseLimite(metaInput);
+  } catch {
+    return { error: "Meta mensal inválida." };
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase.from("categoria").insert({ nome, dono });
+  const { error } = await supabase.from("categoria").insert({ nome, dono, meta_mensal_cents: metaMensalCents });
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
   revalidatePath("/lancar");
   revalidatePath("/mes");
+  revalidatePath("/categorias");
   return { error: null };
 }
 
 export async function atualizarCategoria(id: string, formData: FormData): Promise<ActionResult> {
   const nome = String(formData.get("nome") ?? "").trim();
   const dono = String(formData.get("dono") ?? "") as CategoriaDono;
+  const metaInput = String(formData.get("metaMensal") ?? "");
 
   if (!nome) return { error: "Informe o nome da categoria." };
 
+  let metaMensalCents: number | null;
+  try {
+    metaMensalCents = parseLimite(metaInput);
+  } catch {
+    return { error: "Meta mensal inválida." };
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase.from("categoria").update({ nome, dono }).eq("id", id);
+  const { error } = await supabase
+    .from("categoria")
+    .update({ nome, dono, meta_mensal_cents: metaMensalCents })
+    .eq("id", id);
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
   revalidatePath("/lancar");
   revalidatePath("/mes");
+  revalidatePath("/categorias");
   return { error: null };
 }
 
@@ -219,5 +246,6 @@ export async function excluirCategoria(id: string): Promise<ActionResult> {
   revalidatePath("/config");
   revalidatePath("/lancar");
   revalidatePath("/mes");
+  revalidatePath("/categorias");
   return { error: null };
 }

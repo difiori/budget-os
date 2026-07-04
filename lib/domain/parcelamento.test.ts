@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gerarParcelas } from "./parcelamento";
+import { gerarParcelas, nomeComParcela, nomeSemParcela } from "./parcelamento";
 
 const base = {
   nome: "Compra Teste",
@@ -74,5 +74,28 @@ describe("gerarParcelas (regra 5)", () => {
     expect(() =>
       gerarParcelas({ ...base, totalCents: 1000, numeroParcelas: 0, data: { year: 2026, month: 7, day: 1 } })
     ).toThrow();
+  });
+});
+
+describe("nomeComParcela / nomeSemParcela", () => {
+  it("não duplica o sufixo quando o nome já o contém (parcelamento)", () => {
+    expect(nomeComParcela("Tap 01/05", "01/05")).toBe("Tap 01/05");
+    expect(nomeSemParcela("Tap 01/05", "01/05")).toBe("Tap");
+  });
+
+  it("anexa a parcela quando o nome não a contém (dado importado)", () => {
+    expect(nomeComParcela("Cheque Especial", "10/24")).toBe("Cheque Especial · 10/24");
+    expect(nomeSemParcela("Cheque Especial", "10/24")).toBe("Cheque Especial");
+  });
+
+  it("sem parcela, devolve o nome intacto", () => {
+    expect(nomeComParcela("Uber", null)).toBe("Uber");
+    expect(nomeSemParcela("Uber", null)).toBe("Uber");
+  });
+
+  it("ida e volta é estável para parcelamento gerado", () => {
+    const [p] = gerarParcelas({ ...base, totalCents: 5000, numeroParcelas: 5, data: { year: 2026, month: 7, day: 1 } });
+    expect(nomeSemParcela(p.nome, p.parcela)).toBe("Compra Teste");
+    expect(nomeComParcela(p.nome, p.parcela)).toBe(p.nome);
   });
 });

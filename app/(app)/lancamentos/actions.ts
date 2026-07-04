@@ -35,6 +35,8 @@ function revalidarTudo() {
   revalidatePath("/");
   revalidatePath("/cartoes");
   revalidatePath("/mes");
+  revalidatePath("/categorias");
+  revalidatePath("/contas");
 }
 
 /** Ajusta o saldo da conta-alvo pela diferença entre o efeito antigo e o novo,
@@ -109,7 +111,7 @@ export async function atualizarSaida(input: {
   cartaoId: string | null;
 }): Promise<ActionResult> {
   if (!input.nome.trim()) return { error: "Informe o nome." };
-  if (input.totalCents <= 0) return { error: "O valor precisa ser maior que zero." };
+  if (input.totalCents === 0) return { error: "O valor não pode ser zero." };
 
   const supabase = await createClient();
   const editadoPor = await editorAutenticado(supabase);
@@ -185,7 +187,7 @@ export async function atualizarEntrada(input: {
   contaDestinoIdAnterior: string;
 }): Promise<ActionResult> {
   if (!input.nome.trim()) return { error: "Informe o nome." };
-  if (input.quantiaCents <= 0) return { error: "O valor precisa ser maior que zero." };
+  if (input.quantiaCents === 0) return { error: "O valor não pode ser zero." };
   if (!input.contaDestinoId) return { error: "Selecione a conta." };
 
   const supabase = await createClient();

@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Amount } from "@/components/ui/amount";
 import { PersonDot } from "@/components/ui/person-tag";
 import { parseCalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
+import { nomeComParcela } from "@/lib/domain/parcelamento";
 import type { Categoria, Pessoa, Saida } from "@/lib/domain/types";
 
 type Filtro = "Geral" | Pessoa;
@@ -59,9 +62,15 @@ export function UltimasSaidas({
             <Chip key={f} label={f} selected={filtro === f} onClick={() => setFiltro(f)} />
           ))}
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Chip label="Por vencimento" selected={ordenacao === "recentes"} onClick={() => setOrdenacao("recentes")} />
           <Chip label="Maior valor" selected={ordenacao === "valor"} onClick={() => setOrdenacao("valor")} />
+          <Link
+            href={`/lancamentos?pessoa=Casal&tipo=Saida&metodo=Todos&ano=${mesReferencia.year}&mes=${mesReferencia.month}`}
+            className="type-caption ml-1 flex items-center gap-1 text-ink-2 hover:text-ink"
+          >
+            Ver tudo <ArrowRight size={12} />
+          </Link>
         </div>
       </div>
 
@@ -75,10 +84,7 @@ export function UltimasSaidas({
             <li key={s.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
               <PersonDot pessoa={s.pessoa} />
               <div className="min-w-0 flex-1">
-                <p className="type-body truncate text-ink">
-                  {s.nome}
-                  {s.parcela ? ` · ${s.parcela}` : ""}
-                </p>
+                <p className="type-body truncate text-ink">{nomeComParcela(s.nome, s.parcela)}</p>
                 <p className="type-caption truncate text-ink-3">
                   {categoriaPorId.get(s.categoria_id ?? "") ?? "Sem categoria"} · {s.metodo}
                 </p>

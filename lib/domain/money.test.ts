@@ -18,6 +18,19 @@ describe("parseCentsFromBRL", () => {
   it("rejeita entrada inválida", () => {
     expect(() => parseCentsFromBRL("abc")).toThrow();
     expect(() => parseCentsFromBRL("")).toThrow();
+    expect(() => parseCentsFromBRL("-")).toThrow();
+  });
+
+  it("aceita valores negativos (ex.: adiantar/abater pagamento)", () => {
+    expect(parseCentsFromBRL("-50,00")).toBe(-5000);
+    expect(parseCentsFromBRL("-1.234,56")).toBe(-123456);
+    expect(parseCentsFromBRL("-10")).toBe(-1000);
+  });
+
+  it("tolera espaços/NBSP e 'R$' no roundtrip formatar→reparsear", () => {
+    expect(parseCentsFromBRL(formatCentsToBRL(-1000))).toBe(-1000);
+    expect(parseCentsFromBRL(formatCentsToBRL(123456))).toBe(123456);
+    expect(parseCentsFromBRL("- 10,00")).toBe(-1000);
   });
 });
 

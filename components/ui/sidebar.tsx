@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, LayoutDashboard, PlusCircle, Receipt, Settings } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, PlusCircle, Receipt, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AccountSwitcher } from "@/components/account-switcher";
@@ -19,6 +19,8 @@ const ITEMS: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancar", label: "Lançar", icon: PlusCircle },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
+  { href: "/categorias", label: "Categorias", icon: Tags },
+  { href: "/contas", label: "Conta Bancária", icon: Landmark },
   { href: "/mes", label: "Mês", icon: CalendarRange },
   { href: "/lancamentos", label: "Lançamentos", icon: Receipt },
   { href: "/config", label: "Configurações", icon: Settings },
@@ -30,8 +32,8 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-surface px-4 py-7 md:flex">
       <div className="mb-9 px-3">
-        <p className="text-[1.4rem] italic leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
-          Nosso Orçamento
+        <p className="text-[1.4rem] leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
+          Budget OS
         </p>
         <p className="type-eyebrow mt-1 text-ink-3">Diego &amp; Vitor</p>
       </div>
@@ -64,7 +66,10 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
           <AccountSwitcher contaAtiva={contaAtiva} />
         </div>
         <div className="flex items-center justify-between border-t border-hairline pt-3">
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <span className="type-caption text-ink-2">Tema escuro</span>
+            <ThemeToggle />
+          </div>
           <SignOutButton />
         </div>
       </div>

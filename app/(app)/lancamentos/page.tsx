@@ -177,6 +177,11 @@ export default async function LancamentosPage({
       </div>
 
       <LancamentosList
+        // A lista guarda os itens em estado local (edição/remoção otimista).
+        // A key força recriar esse estado quando o recorte muda — sem ela, a
+        // navegação soft do next/link reaproveita a instância e mantém os
+        // lançamentos do mês/filtro anterior.
+        key={`${pessoa}-${tipo}-${metodo}-${categoria}-${mesReferencia.year}-${mesReferencia.month}`}
         saidasIniciais={(saidas ?? []) as Saida[]}
         entradasIniciais={(entradas ?? []) as Entrada[]}
         transferenciasIniciais={(transferencias ?? []) as Transferencia[]}

@@ -32,8 +32,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-full flex-1 flex-col items-center justify-center gap-10 px-6 py-12">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-[2rem] italic leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
-          Nosso Orçamento
+        <h1 className="text-[2rem] leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
+          Budget OS
         </h1>
         <p className="type-eyebrow text-ink-3">Diego &amp; Vitor</p>
       </div>

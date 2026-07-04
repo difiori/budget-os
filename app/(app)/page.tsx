@@ -10,7 +10,7 @@ import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
-import { entradasDoMesCents, gastosDoMesCents, saldoPrevistoCents } from "@/lib/domain/mes";
+import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
 import { formatCentsToBRL } from "@/lib/domain/money";
@@ -22,7 +22,8 @@ function pessoaResumo(
   contas: Conta[],
   saidas: Saida[],
   entradas: Entrada[],
-  mesReferencia: ReturnType<typeof hoje>
+  mesReferencia: ReturnType<typeof hoje>,
+  contaVinculadaPorCartaoId: Map<string, string | null>
 ) {
   const contasPessoa = contas.filter((c) => c.dono === pessoa);
   const saidasPessoa = saidas.filter((s) => s.pessoa === pessoa);
@@ -30,9 +31,14 @@ function pessoaResumo(
 
   const saldoAtualTotal = contasPessoa.reduce((sum, conta) => sum + conta.saldo_atual_cents, 0);
   const saldoPrevistoTotal = contasPessoa.reduce((sum, conta) => {
-    const gastos = gastosDoMesCents(conta.id, saidasPessoa, mesReferencia);
-    const entradasConta = entradasDoMesCents(conta.id, entradasPessoa, mesReferencia);
-    return sum + saldoPrevistoCents(conta.saldo_atual_cents, entradasConta, gastos);
+    const { saldoPrevisto } = resumoContaMes(
+      conta,
+      saidasPessoa,
+      entradasPessoa,
+      mesReferencia,
+      contaVinculadaPorCartaoId
+    );
+    return sum + saldoPrevisto;
   }, 0);
 
   const saidasMes = gastosPorMes(saidasPessoa, [mesReferencia])[0];
@@ -130,6 +136,7 @@ export default async function DashboardPage({
     { data: saidas },
     { data: entradas },
     { data: categorias },
+    { data: cartoes },
     { data: recentesDiego },
     { data: recentesVitor },
   ] = await Promise.all([
@@ -139,6 +146,7 @@ export default async function DashboardPage({
       .from("entrada")
       .select("id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"),
     supabase.from("categoria").select("id, nome, dono"),
+    supabase.from("cartao").select("id, conta_vinculada_id"),
     // Só as saídas com vencimento no mês em foco — nada de outros meses
     // vazando na lista. Buscadas por pessoa (a importação histórica gravou uma
     // pessoa antes da outra, então um corte único deixaria a outra de fora) e
@@ -163,13 +171,21 @@ export default async function DashboardPage({
   const todasSaidas = (saidas ?? []) as Saida[];
   const todasEntradas = (entradas ?? []) as Entrada[];
   const todasCategorias = (categorias ?? []) as Categoria[];
+  const contaVinculadaPorCartaoId = new Map(
+    ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
+  );
 
-  const diego = pessoaResumo("Diego", todasContas, todasSaidas, todasEntradas, mesReferencia);
-  const vitor = pessoaResumo("Vitor", todasContas, todasSaidas, todasEntradas, mesReferencia);
+  const diego = pessoaResumo("Diego", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
+  const vitor = pessoaResumo("Vitor", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
   const ativo = contaAtiva === "Diego" ? diego : vitor;
 
   const saldoAtualCasal = diego.saldoAtualTotal + vitor.saldoAtualTotal;
   const saldoPrevistoCasal = diego.saldoPrevistoTotal + vitor.saldoPrevistoTotal;
+
+  // Projeção do casal pros próximos 6 meses (mês em foco incluso) — depende
+  // só de parcelas/recorrências já lançadas, não é estimativa estatística.
+  const mesesProjecao = Array.from({ length: 6 }, (_, i) => addMonths(mesReferencia, i));
+  const projecao = projecaoSaldoMeses(todasContas, todasSaidas, todasEntradas, mesesProjecao, contaVinculadaPorCartaoId);
 
   const gastosTrend = gastosPorMes(todasSaidas, meses6);
   const entradasTrend = entradasPorMes(todasEntradas, meses6);
@@ -268,6 +284,21 @@ export default async function DashboardPage({
           <UsoDaRendaCard pessoa="Diego" resumo={diego} />
           <UsoDaRendaCard pessoa="Vitor" resumo={vitor} />
         </div>
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Projeção — próximos 6 meses</h2>
+          <p className="type-caption text-ink-3">saldo do casal, a partir do já lançado</p>
+        </div>
+        <Card className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+          {projecao.map(({ mes, saldoTotal }, i) => (
+            <div key={i} className="flex flex-col gap-1">
+              <span className="type-caption text-ink-3">{i === 0 ? "Este mês" : labelMes(mes)}</span>
+              <Amount cents={saldoTotal} semantic="both" className="type-body font-medium" />
+            </div>
+          ))}
+        </Card>
       </section>
 
       <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">

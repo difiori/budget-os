@@ -1,42 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark";
 
-function temaAtual(): Theme {
+const THEME_EVENT = "theme-change";
+
+function lerTema(): Theme {
   return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
 }
 
-export function ThemeToggle() {
-  // null até montar — o atributo é definido por script inline antes da
-  // hidratação, então só dá pra ler no cliente.
-  const [theme, setTheme] = useState<Theme | null>(null);
+function subscribe(callback: () => void) {
+  window.addEventListener(THEME_EVENT, callback);
+  return () => window.removeEventListener(THEME_EVENT, callback);
+}
 
-  useEffect(() => {
-    setTheme(temaAtual());
-  }, []);
+// Server e primeira pintura sempre assumem "light" — o script inline em
+// app/layout.tsx já corrige o atributo antes da hidratação (suppressHydrationWarning).
+function getServerSnapshot(): Theme {
+  return "light";
+}
 
-  function alternar() {
-    const proximo: Theme = temaAtual() === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", proximo);
-    try {
-      localStorage.setItem("theme", proximo);
-    } catch {
-      // storage indisponível — o tema ainda vale para esta sessão
-    }
-    setTheme(proximo);
+function definirTema(proximo: Theme) {
+  document.documentElement.setAttribute("data-theme", proximo);
+  try {
+    localStorage.setItem("theme", proximo);
+  } catch {
+    // storage indisponível — o tema ainda vale para esta sessão
   }
+  window.dispatchEvent(new Event(THEME_EVENT));
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribe, lerTema, getServerSnapshot);
+  const escuro = theme === "dark";
 
   return (
     <button
       type="button"
-      onClick={alternar}
-      aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
-      className="flex h-9 w-9 items-center justify-center rounded-sm text-ink-2 transition-colors hover:bg-brand-tint hover:text-on-brand-tint"
+      role="switch"
+      aria-checked={escuro}
+      aria-label="Alternar tema escuro"
+      onClick={() => definirTema(escuro ? "light" : "dark")}
+      className="relative flex h-6 w-11 shrink-0 items-center rounded-full bg-track transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-2"
     >
-      {theme === "dark" ? <Sun size={17} strokeWidth={1.75} /> : <Moon size={17} strokeWidth={1.75} />}
+      <span
+        className={`flex h-4.5 w-4.5 items-center justify-center rounded-full bg-surface text-ink-2 shadow-raised transition-transform ${
+          escuro ? "translate-x-[1.375rem]" : "translate-x-0.5"
+        }`}
+      >
+        {escuro ? <Moon size={11} strokeWidth={2} /> : <Sun size={11} strokeWidth={2} />}
+      </span>
     </button>
   );
 }

@@ -9,7 +9,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
-import { entradasDoMesCents, gastosDoMesCents, saldoPrevistoCents } from "@/lib/domain/mes";
+import { resumoContaMes } from "@/lib/domain/mes";
 import { labelMes } from "@/lib/format/meses";
 import type { Categoria, Conta, Entrada, Pessoa, Saida } from "@/lib/domain/types";
 
@@ -56,22 +56,31 @@ export default async function MesPage({
     entradasQuery = entradasQuery.eq("pessoa", pessoa);
   }
 
-  const [{ data: contas }, { data: saidas }, { data: entradas }, { data: categorias }] = await Promise.all([
-    contasQuery,
-    saidasQuery,
-    entradasQuery,
-    supabase.from("categoria").select("id, nome, dono").order("nome"),
-  ]);
+  const [{ data: contas }, { data: saidas }, { data: entradas }, { data: categorias }, { data: cartoes }] =
+    await Promise.all([
+      contasQuery,
+      saidasQuery,
+      entradasQuery,
+      supabase.from("categoria").select("id, nome, dono").order("nome"),
+      supabase.from("cartao").select("id, conta_vinculada_id"),
+    ]);
 
   const todasContas = (contas ?? []) as Conta[];
   const todasSaidas = (saidas ?? []) as Saida[];
   const todasEntradas = (entradas ?? []) as Entrada[];
   const todasCategorias = (categorias ?? []) as Categoria[];
+  const contaVinculadaPorCartaoId = new Map(
+    ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
+  );
 
   const gastosPorConta = todasContas.map((conta) => {
-    const gastos = gastosDoMesCents(conta.id, todasSaidas, mesReferencia);
-    const entradasConta = entradasDoMesCents(conta.id, todasEntradas, mesReferencia);
-    const saldoPrevisto = saldoPrevistoCents(conta.saldo_atual_cents, entradasConta, gastos);
+    const { gastos, entradasConta, saldoPrevisto } = resumoContaMes(
+      conta,
+      todasSaidas,
+      todasEntradas,
+      mesReferencia,
+      contaVinculadaPorCartaoId
+    );
     return { conta, gastos, entradasConta, saldoPrevisto };
   });
 

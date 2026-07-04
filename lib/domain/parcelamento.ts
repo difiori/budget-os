@@ -2,6 +2,26 @@ import { type CalendarDate, addMonths, formatCalendarDateISO } from "./calendar-
 import { calcularVencimento } from "./vencimento";
 import type { MetodoPagamento, Pessoa, SaidaStatus } from "./types";
 
+/**
+ * Nome para exibição junto da parcela, sem duplicar. Parcelamentos gravam o
+ * sufixo "NN/NN" dentro do próprio `nome` (ver gerarParcelas) e também no campo
+ * `parcela`; então, se o nome já termina com esse sufixo, não repetimos. Já
+ * lançamentos importados costumam ter só o `parcela` preenchido, sem sufixo no
+ * nome — nesses, anexamos " · NN/NN".
+ */
+export function nomeComParcela(nome: string, parcela: string | null | undefined): string {
+  if (!parcela) return nome;
+  return nome.trimEnd().endsWith(parcela) ? nome : `${nome} · ${parcela}`;
+}
+
+/** Inverso do acima: o nome sem o sufixo "NN/NN" (para pré-preencher a edição
+ * com o nome base, sem repetir a parcela que já aparece no campo próprio). */
+export function nomeSemParcela(nome: string, parcela: string | null | undefined): string {
+  if (!parcela) return nome;
+  const limpo = nome.trimEnd();
+  return limpo.endsWith(parcela) ? limpo.slice(0, -parcela.length).trimEnd() : nome;
+}
+
 export interface CompraParcelada {
   nome: string;
   totalCents: number;

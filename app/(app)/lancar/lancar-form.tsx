@@ -275,6 +275,9 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
             className="type-hero figures w-full border-none bg-transparent text-ink outline-none placeholder:text-ink-3/50 focus-visible:outline-none"
           />
         </div>
+        <label htmlFor="nome" className="sr-only">
+          Nome do lançamento
+        </label>
         <input
           id="nome"
           name="nome"

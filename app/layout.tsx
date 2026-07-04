@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, Newsreader } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 
-const newsreader = Newsreader({
+// Poppins cobre os dois papéis (display e interface) — uma família só no
+// projeto todo, sem serifa.
+const poppinsDisplay = Poppins({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
 });
 
-const hankenGrotesk = Hanken_Grotesk({
+const poppinsSans = Poppins({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Nosso Orçamento",
+  title: "Budget OS",
   description: "Gestão financeira do casal — Diego & Vitor",
 };
 
@@ -45,7 +47,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${newsreader.variable} ${hankenGrotesk.variable} h-full antialiased`}
+      className={`${poppinsDisplay.variable} ${poppinsSans.variable} h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

@@ -5,6 +5,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import {
   atualizarCartao,
   atualizarCategoria,
@@ -52,6 +54,8 @@ function ContaRow({ conta }: { conta: Conta }) {
   const [saldo, setSaldo] = useState(centsToInputValue(conta.saldo_atual_cents));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const confirmar = useConfirm();
+  const toast = useToast();
 
   function salvar() {
     const formData = new FormData();
@@ -64,11 +68,12 @@ function ContaRow({ conta }: { conta: Conta }) {
     });
   }
 
-  function excluir() {
-    if (!confirm(`Excluir a conta "${conta.nome}"?`)) return;
+  async function excluir() {
+    if (!(await confirmar(`Excluir a conta "${conta.nome}"?`))) return;
     startTransition(async () => {
       const { error } = await excluirConta(conta.id);
       setError(error);
+      if (!error) toast(`Conta "${conta.nome}" excluída.`);
     });
   }
 
@@ -224,6 +229,8 @@ function CartaoRow({ cartao, contas }: { cartao: Cartao; contas: Conta[] }) {
   const [contaVinculadaId, setContaVinculadaId] = useState(cartao.conta_vinculada_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const confirmar = useConfirm();
+  const toast = useToast();
 
   function salvar() {
     const formData = new FormData();
@@ -240,11 +247,12 @@ function CartaoRow({ cartao, contas }: { cartao: Cartao; contas: Conta[] }) {
     });
   }
 
-  function excluir() {
-    if (!confirm(`Excluir o cartão "${cartao.nome}"?`)) return;
+  async function excluir() {
+    if (!(await confirmar(`Excluir o cartão "${cartao.nome}"?`))) return;
     startTransition(async () => {
       const { error } = await excluirCartao(cartao.id);
       setError(error);
+      if (!error) toast(`Cartão "${cartao.nome}" excluído.`);
     });
   }
 
@@ -450,24 +458,31 @@ function CartoesSection({ cartoes, contas }: { cartoes: Cartao[]; contas: Conta[
 function CategoriaRow({ categoria }: { categoria: Categoria }) {
   const [nome, setNome] = useState(categoria.nome);
   const [dono, setDono] = useState<CategoriaDono>(categoria.dono);
+  const [metaMensal, setMetaMensal] = useState(
+    categoria.meta_mensal_cents !== null ? centsToInputValue(categoria.meta_mensal_cents) : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const confirmar = useConfirm();
+  const toast = useToast();
 
   function salvar() {
     const formData = new FormData();
     formData.set("nome", nome);
     formData.set("dono", dono);
+    formData.set("metaMensal", metaMensal);
     startTransition(async () => {
       const { error } = await atualizarCategoria(categoria.id, formData);
       setError(error);
     });
   }
 
-  function excluir() {
-    if (!confirm(`Excluir a categoria "${categoria.nome}"?`)) return;
+  async function excluir() {
+    if (!(await confirmar(`Excluir a categoria "${categoria.nome}"?`))) return;
     startTransition(async () => {
       const { error } = await excluirCategoria(categoria.id);
       setError(error);
+      if (!error) toast(`Categoria "${categoria.nome}" excluída.`);
     });
   }
 
@@ -496,6 +511,17 @@ function CategoriaRow({ categoria }: { categoria: Categoria }) {
         ))}
       </div>
 
+      <div>
+        <label className="type-caption mb-1 block text-ink-2">Meta mensal (vazio = sem meta)</label>
+        <input
+          value={metaMensal}
+          onChange={(e) => setMetaMensal(e.target.value)}
+          inputMode="decimal"
+          placeholder="Sem meta"
+          className="figures w-40 rounded-sm border border-hairline-strong bg-raised px-3 py-2 text-ink outline-none focus:border-ink-2"
+        />
+      </div>
+
       <ErrorLine error={error} />
 
       <Button variant="tonal" onClick={salvar} disabled={isPending} className="self-start px-5 py-2">
@@ -508,6 +534,7 @@ function CategoriaRow({ categoria }: { categoria: Categoria }) {
 function NovaCategoriaCard({ onCriada }: { onCriada: () => void }) {
   const [nome, setNome] = useState("");
   const [dono, setDono] = useState<CategoriaDono>("Ambos");
+  const [metaMensal, setMetaMensal] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -519,6 +546,7 @@ function NovaCategoriaCard({ onCriada }: { onCriada: () => void }) {
     const formData = new FormData();
     formData.set("nome", nome);
     formData.set("dono", dono);
+    formData.set("metaMensal", metaMensal);
     startTransition(async () => {
       const { error } = await criarCategoria(formData);
       if (error) {
@@ -526,6 +554,7 @@ function NovaCategoriaCard({ onCriada }: { onCriada: () => void }) {
         return;
       }
       setNome("");
+      setMetaMensal("");
       setError(null);
       onCriada();
     });
@@ -545,6 +574,13 @@ function NovaCategoriaCard({ onCriada }: { onCriada: () => void }) {
           <Chip key={d} label={d} selected={dono === d} onClick={() => setDono(d)} />
         ))}
       </div>
+      <input
+        value={metaMensal}
+        onChange={(e) => setMetaMensal(e.target.value)}
+        inputMode="decimal"
+        placeholder="Meta mensal (opcional)"
+        className="figures w-full rounded-sm border border-hairline-strong bg-raised px-3 py-2 text-ink outline-none focus:border-ink-2"
+      />
       <ErrorLine error={error} />
       <Button onClick={criar} disabled={isPending} className="self-start px-5 py-2">
         <span className="flex items-center gap-1.5">

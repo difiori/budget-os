@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "./fatura";
 import { parseCentsFromBRL } from "./money";
-import type { SaidaParaCalculo, SaidaStatus } from "./types";
+import type { SaidaOrigem, SaidaParaCalculo, SaidaStatus } from "./types";
 
 const CARBON_BLACK = "cartao-carbon-black";
 const OUTRO_CARTAO = "cartao-outro";
@@ -20,9 +20,9 @@ function saida(overrides: Partial<SaidaParaCalculo>): SaidaParaCalculo {
 }
 
 function saidaComStatus(
-  overrides: Partial<SaidaParaCalculo> & { status?: SaidaStatus }
-): SaidaParaCalculo & { status: SaidaStatus } {
-  return { ...saida(overrides), status: overrides.status ?? "A pagar" };
+  overrides: Partial<SaidaParaCalculo> & { status?: SaidaStatus; origem?: SaidaOrigem }
+): SaidaParaCalculo & { status: SaidaStatus; origem: SaidaOrigem } {
+  return { ...saida(overrides), status: overrides.status ?? "A pagar", origem: overrides.origem ?? "Manual" };
 }
 
 describe("faturaAtualCents (regras 1-2)", () => {
@@ -57,12 +57,13 @@ describe("faturaAtualCents (regras 1-2)", () => {
 
 describe("limiteComprometidoCents", () => {
   it("soma parcelas futuras não pagas por inteiro, não só a do mês corrente", () => {
+    // Compra parcelada: cada parcela cai num mês (data própria), origem Parcelamento.
     const saidas = [
-      saidaComStatus({ total_cents: 3333, vencimento: "2026-08-10", status: "A pagar" }),
-      saidaComStatus({ total_cents: 3333, vencimento: "2026-09-10", status: "A pagar" }),
-      saidaComStatus({ total_cents: 3334, vencimento: "2026-10-10", status: "A pagar" }),
+      saidaComStatus({ total_cents: 3333, data: "2026-08-10", origem: "Parcelamento" }),
+      saidaComStatus({ total_cents: 3333, data: "2026-09-10", origem: "Parcelamento" }),
+      saidaComStatus({ total_cents: 3334, data: "2026-10-10", origem: "Parcelamento" }),
     ];
-    expect(limiteComprometidoCents(CARBON_BLACK, saidas)).toBe(10000);
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(10000);
   });
 
   it("ignora saídas já pagas", () => {
@@ -70,12 +71,41 @@ describe("limiteComprometidoCents", () => {
       saidaComStatus({ total_cents: 10000, status: "Pago" }),
       saidaComStatus({ total_cents: 5000, status: "A pagar" }),
     ];
-    expect(limiteComprometidoCents(CARBON_BLACK, saidas)).toBe(5000);
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(5000);
   });
 
   it("ignora compras de outros cartões", () => {
     const saidas = [saidaComStatus({ total_cents: 10000, cartao_id: OUTRO_CARTAO, status: "A pagar" })];
-    expect(limiteComprometidoCents(CARBON_BLACK, saidas)).toBe(0);
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(0);
+  });
+
+  it("ignora compras de meses passados (anteriores à fatura a vencer)", () => {
+    // maio/2026 < junho (a vencer p/ foco julho) — dado antigo não pesa no limite.
+    const saidas = [saidaComStatus({ total_cents: 10000, data: "2026-05-10" })];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(0);
+  });
+
+  it("conta a fatura a vencer (mês anterior ainda não paga)", () => {
+    const saidas = [saidaComStatus({ total_cents: 8000, data: "2026-06-10" })];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(8000);
+  });
+
+  it("no futuro só conta parcela — recorrente e avulsa futuras não pesam", () => {
+    const saidas = [
+      saidaComStatus({ total_cents: 5000, data: "2026-09-10", origem: "Recorrente" }), // assinatura futura
+      saidaComStatus({ total_cents: 4000, data: "2026-10-10", origem: "Manual" }), // avulsa futura (projeção)
+      saidaComStatus({ total_cents: 2000, data: "2026-11-10", origem: "Parcelamento" }), // parcela futura
+    ];
+    // só a parcela futura conta.
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(2000);
+  });
+
+  it("conta recorrente e avulsa do ciclo atual (a vencer e do mês)", () => {
+    const saidas = [
+      saidaComStatus({ total_cents: 3000, data: "2026-06-10", origem: "Recorrente" }), // a vencer
+      saidaComStatus({ total_cents: 3000, data: "2026-07-10", origem: "Manual" }), // do mês
+    ];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(6000);
   });
 });
 

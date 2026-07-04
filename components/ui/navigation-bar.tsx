@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, LayoutDashboard, PlusCircle, Receipt, Settings } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, PlusCircle, Receipt, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 
 interface NavItem {
@@ -15,6 +15,8 @@ const ITEMS: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancar", label: "Lançar", icon: PlusCircle },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
+  { href: "/categorias", label: "Categ.", icon: Tags },
+  { href: "/contas", label: "Contas", icon: Landmark },
   { href: "/mes", label: "Mês", icon: CalendarRange },
   { href: "/lancamentos", label: "Extrato", icon: Receipt },
   { href: "/config", label: "Config", icon: Settings },
@@ -30,7 +32,7 @@ export function NavigationBar() {
       className="fixed inset-x-0 bottom-0 z-20 border-t border-hairline bg-surface md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid grid-cols-6">
+      <div className="grid grid-cols-8">
         {ITEMS.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;

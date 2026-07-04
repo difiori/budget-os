@@ -3,9 +3,9 @@ import { categoriasParaPessoa } from "./categoria";
 import type { Categoria } from "./types";
 
 const categorias: Categoria[] = [
-  { id: "1", nome: "Alimentação", dono: "Ambos" },
-  { id: "2", nome: "Contas Jurídicas", dono: "Diego" },
-  { id: "3", nome: "Shopping", dono: "Diego" },
+  { id: "1", nome: "Alimentação", dono: "Ambos", meta_mensal_cents: null },
+  { id: "2", nome: "Contas Jurídicas", dono: "Diego", meta_mensal_cents: null },
+  { id: "3", nome: "Shopping", dono: "Diego", meta_mensal_cents: null },
 ];
 
 describe("categoriasParaPessoa", () => {
