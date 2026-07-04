@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
 import { ChipLink } from "@/components/ui/chip-link";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
@@ -41,20 +42,26 @@ export default async function CartoesPage({
     .order("nome");
   if (escopo !== "Casal") cartoesQuery = cartoesQuery.eq("dono", escopo);
 
-  const [{ data: cartoes }, { data: saidas }, { data: contas }, { data: categorias }] = await Promise.all([
+  const [{ data: cartoes }, saidasTodas, { data: contas }, { data: categorias }] = await Promise.all([
     cartoesQuery,
-    supabase
-      .from("saida")
-      .select(
-        "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por"
-      )
-      .not("cartao_id", "is", null),
+    // Paginado: sem isso, o limite de 1000 linhas do PostgREST truncaria as
+    // compras de cartão e o limite comprometido (que soma parcelas futuras).
+    fetchAllRows<Saida>((from, to) =>
+      supabase
+        .from("saida")
+        .select(
+          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por"
+        )
+        .not("cartao_id", "is", null)
+        .order("id")
+        .range(from, to)
+    ),
     supabase.from("conta").select("id, nome"),
     supabase.from("categoria").select("id, nome, dono").order("nome"),
   ]);
 
   const todosCartoes = (cartoes ?? []) as Cartao[];
-  const todasSaidas = (saidas ?? []) as Saida[];
+  const todasSaidas = saidasTodas;
   const contaPorId = new Map(((contas ?? []) as { id: string; nome: string }[]).map((c) => [c.id, c.nome]));
   const categoriaPorId = new Map(((categorias ?? []) as Categoria[]).map((c) => [c.id, c.nome]));
 

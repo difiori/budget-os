@@ -7,6 +7,7 @@ import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
 import { resumoContaMes } from "@/lib/domain/mes";
@@ -41,33 +42,42 @@ export default async function MesPage({
   const mesSeguinte = addMonths(mesReferencia, 1);
 
   let contasQuery = supabase.from("conta").select("id, nome, dono, saldo_atual_cents").order("nome");
-  let saidasQuery = supabase
-    .from("saida")
-    .select(
-      "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at"
-    );
-  let entradasQuery = supabase
-    .from("entrada")
-    .select("id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at");
-
   if (pessoa !== "Casal") {
     contasQuery = contasQuery.eq("dono", pessoa);
-    saidasQuery = saidasQuery.eq("pessoa", pessoa);
-    entradasQuery = entradasQuery.eq("pessoa", pessoa);
   }
 
-  const [{ data: contas }, { data: saidas }, { data: entradas }, { data: categorias }, { data: cartoes }] =
-    await Promise.all([
-      contasQuery,
-      saidasQuery,
-      entradasQuery,
-      supabase.from("categoria").select("id, nome, dono").order("nome"),
-      supabase.from("cartao").select("id, conta_vinculada_id"),
-    ]);
+  // Paginado (fetchAllRows): a tabela `saida` passa de 1000 linhas e o limite
+  // padrão do PostgREST truncaria o cálculo do saldo previsto por conta.
+  const [contasResp, saidasTodas, entradasTodas, categoriasResp, cartoesResp] = await Promise.all([
+    contasQuery,
+    fetchAllRows<Saida>((from, to) => {
+      let q = supabase
+        .from("saida")
+        .select(
+          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at"
+        );
+      if (pessoa !== "Casal") q = q.eq("pessoa", pessoa);
+      return q.order("id").range(from, to);
+    }),
+    fetchAllRows<Entrada>((from, to) => {
+      let q = supabase
+        .from("entrada")
+        .select(
+          "id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"
+        );
+      if (pessoa !== "Casal") q = q.eq("pessoa", pessoa);
+      return q.order("id").range(from, to);
+    }),
+    supabase.from("categoria").select("id, nome, dono").order("nome"),
+    supabase.from("cartao").select("id, conta_vinculada_id"),
+  ]);
 
+  const { data: contas } = contasResp;
+  const { data: categorias } = categoriasResp;
+  const { data: cartoes } = cartoesResp;
   const todasContas = (contas ?? []) as Conta[];
-  const todasSaidas = (saidas ?? []) as Saida[];
-  const todasEntradas = (entradas ?? []) as Entrada[];
+  const todasSaidas = saidasTodas;
+  const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
   const contaVinculadaPorCartaoId = new Map(
     ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
