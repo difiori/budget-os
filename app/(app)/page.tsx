@@ -163,7 +163,7 @@ export default async function DashboardPage({
         .range(from, to)
     ),
     supabase.from("categoria").select("id, nome, dono"),
-    supabase.from("cartao").select("id, conta_vinculada_id"),
+    supabase.from("cartao").select("id, nome, conta_vinculada_id"),
     // Só as saídas com vencimento no mês em foco — nada de outros meses
     // vazando na lista. Buscadas por pessoa (a importação histórica gravou uma
     // pessoa antes da outra, então um corte único deixaria a outra de fora) e
@@ -188,9 +188,10 @@ export default async function DashboardPage({
   const todasSaidas = saidasTodas;
   const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
-  const contaVinculadaPorCartaoId = new Map(
-    ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
-  );
+  const listaCartoes = (cartoes ?? []) as { id: string; nome: string; conta_vinculada_id: string | null }[];
+  const contaVinculadaPorCartaoId = new Map(listaCartoes.map((c) => [c.id, c.conta_vinculada_id]));
+  const contaPorId = new Map(todasContas.map((c) => [c.id, c.nome]));
+  const cartaoPorId = new Map(listaCartoes.map((c) => [c.id, c.nome]));
 
   const diego = pessoaResumo("Diego", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
   const vitor = pessoaResumo("Vitor", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
@@ -347,7 +348,13 @@ export default async function DashboardPage({
 
       <section className="mt-8">
         <h2 className="type-title mb-3 text-ink">Últimas saídas</h2>
-        <UltimasSaidas saidas={saidasRecentes} categorias={todasCategorias} mesReferencia={mesReferencia} />
+        <UltimasSaidas
+          saidas={saidasRecentes}
+          categorias={todasCategorias}
+          contaPorId={contaPorId}
+          cartaoPorId={cartaoPorId}
+          mesReferencia={mesReferencia}
+        />
       </section>
     </main>
   );

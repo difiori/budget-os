@@ -94,16 +94,18 @@ function CabecalhoOrdenavel({
 }) {
   const ativo = ordenacao.campo === campo;
   const Icone = ativo ? (ordenacao.direcao === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  // Cor do rótulo é sempre a mesma (consistência); o estado ativo aparece só
+  // no ícone (seta cheia em verde), não escurecendo o texto.
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`type-eyebrow flex items-center gap-1 hover:text-ink ${
+      className={`type-eyebrow flex items-center gap-1 text-ink-3 transition-colors hover:text-ink-2 ${
         align === "right" ? "justify-end" : ""
-      } ${ativo ? "text-ink" : "text-ink-3"}`}
+      }`}
     >
       {label}
-      <Icone size={11} />
+      <Icone size={11} className={ativo ? "text-brand" : "text-ink-3"} />
     </button>
   );
 }
@@ -138,7 +140,7 @@ function CartaoColapsado({
         <div className="flex min-w-0 items-start gap-2.5">
           <PersonDot pessoa={pessoa} className="mt-2" />
           <div className="min-w-0">
-            <p className="type-body truncate text-ink">{titulo}</p>
+            <p className="truncate text-[0.875rem] text-ink">{titulo}</p>
             <p className="type-caption text-ink-3">{subtitulo}</p>
           </div>
         </div>
@@ -351,7 +353,7 @@ function SaidaRow({
     <>
       <LinhaBase>
         <PersonDot pessoa={saida.pessoa} />
-        <span className="type-body truncate text-ink">{nomeComParcela(saida.nome, saida.parcela)}</span>
+        <span className="truncate text-[0.875rem] text-ink">{nomeComParcela(saida.nome, saida.parcela)}</span>
         <span className="type-caption truncate text-ink-2">{categoriaNome}</span>
         <span className="type-caption truncate text-ink-2">{saida.metodo}</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
@@ -530,7 +532,7 @@ function EntradaRow({
     <>
       <LinhaBase>
         <PersonDot pessoa={entrada.pessoa} />
-        <span className="type-body truncate text-ink">{entrada.nome}</span>
+        <span className="truncate text-[0.875rem] text-ink">{entrada.nome}</span>
         <span className="type-caption truncate text-ink-3">—</span>
         <span className="type-caption truncate text-ink-2">Entrada</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
@@ -702,7 +704,7 @@ function TransferenciaRow({
     <>
       <LinhaBase>
         <PersonDot pessoa={transferencia.pessoa} />
-        <span className="type-body truncate text-ink">{transferencia.nome}</span>
+        <span className="truncate text-[0.875rem] text-ink">{transferencia.nome}</span>
         <span className="type-caption truncate text-ink-3">Transferência</span>
         <span className="type-caption truncate text-ink-3">—</span>
         <span className="type-caption truncate text-ink-2">{rota}</span>
@@ -1098,6 +1100,7 @@ export function LancamentosList({
               </label>
             )}
             <div className={`${ROW_GRID} flex-1 px-3 py-2.5`}>
+            <span />
             <CabecalhoOrdenavel label="Nome" campo="nome" ordenacao={ordenacao} onClick={() => alternarOrdenacao("nome")} />
             <CabecalhoOrdenavel
               label="Categoria"
