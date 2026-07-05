@@ -7,7 +7,7 @@ import type { Pessoa } from "@/lib/domain/types";
 export type TipoLanc = "Saida" | "Entrada" | "Transferencia";
 export type StatusGrupo = "A pagar" | "Pago" | "A receber" | "Recebido";
 export type Metodo = "Débito" | "Crédito";
-export type CampoOrdenacao = "data" | "valor" | "nome" | "categoria";
+export type CampoOrdenacao = "registro" | "vencimento" | "valor" | "nome" | "categoria";
 export interface Ordenacao {
   campo: CampoOrdenacao;
   direcao: "asc" | "desc";
@@ -35,7 +35,11 @@ export interface ItemDescriptor {
   contaCartaoIds: string[];
   origem: string | null;
   statusGrupo: StatusGrupo | null;
-  dataSort: string;
+  /** Data em que o lançamento "acontece" (vencimento da saída, data da entrada
+   * ou transferência). Nem toda saída tem vencimento — daí o fallback. */
+  vencimentoSort: string;
+  /** Data de criação do registro (created_at) — sempre existe. */
+  registroSort: string;
   valorCents: number;
   node: React.ReactNode;
 }
@@ -73,11 +77,13 @@ export function passaFiltro(d: ItemDescriptor, f: Filtros): boolean {
 
 export function ordenar(itens: ItemDescriptor[], o: Ordenacao): ItemDescriptor[] {
   const mult = o.direcao === "asc" ? 1 : -1;
+  const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
   return [...itens].sort((a, b) => {
     if (o.campo === "valor") return (a.valorCents - b.valorCents) * mult;
     if (o.campo === "nome") return a.nome.localeCompare(b.nome, "pt-BR") * mult;
     if (o.campo === "categoria") return a.categoriaNome.localeCompare(b.categoriaNome, "pt-BR") * mult;
-    return (a.dataSort < b.dataSort ? -1 : a.dataSort > b.dataSort ? 1 : 0) * mult;
+    if (o.campo === "registro") return cmp(a.registroSort, b.registroSort) * mult;
+    return cmp(a.vencimentoSort, b.vencimentoSort) * mult;
   });
 }
 
@@ -95,7 +101,8 @@ const TIPOS: { value: TipoLanc; label: string }[] = [
 const METODOS: Metodo[] = ["Débito", "Crédito"];
 const STATUS: StatusGrupo[] = ["A pagar", "Pago", "A receber", "Recebido"];
 const CAMPOS: { value: CampoOrdenacao; label: string }[] = [
-  { value: "data", label: "Data" },
+  { value: "registro", label: "Registro" },
+  { value: "vencimento", label: "Vencimento" },
   { value: "valor", label: "Valor" },
   { value: "nome", label: "Nome" },
   { value: "categoria", label: "Categoria" },

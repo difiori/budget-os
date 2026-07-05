@@ -127,8 +127,6 @@ export default async function DashboardPage({
   const mesAnterior = addMonths(mesReferencia, -1);
   const mesSeguinte = addMonths(mesReferencia, 1);
   const meses6 = ultimosMeses(mesReferencia, 6);
-  const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
-  const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
 
   const {
     data: { user },
@@ -164,24 +162,23 @@ export default async function DashboardPage({
     ),
     supabase.from("categoria").select("id, nome, dono"),
     supabase.from("cartao").select("id, nome, conta_vinculada_id"),
-    // Só as saídas com vencimento no mês em foco — nada de outros meses
-    // vazando na lista. Buscadas por pessoa (a importação histórica gravou uma
-    // pessoa antes da outra, então um corte único deixaria a outra de fora) e
-    // ordenadas por vencimento.
+    // "Últimas saídas" é um feed de recência: as saídas registradas mais
+    // recentemente (por created_at), não por vencimento — muitas nem têm
+    // vencimento. Buscadas por pessoa (a importação histórica gravou uma
+    // pessoa antes da outra, então um corte único deixaria a outra de fora),
+    // ordenadas pela data de criação, as 30 mais novas de cada.
     supabase
       .from("saida")
       .select(saidaColunasRecentes)
       .eq("pessoa", "Diego")
-      .gte("vencimento", inicioMes)
-      .lt("vencimento", fimMes)
-      .order("vencimento", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(30),
     supabase
       .from("saida")
       .select(saidaColunasRecentes)
       .eq("pessoa", "Vitor")
-      .gte("vencimento", inicioMes)
-      .lt("vencimento", fimMes)
-      .order("vencimento", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(30),
   ]);
 
   const todasContas = (contas ?? []) as Conta[];
@@ -222,7 +219,7 @@ export default async function DashboardPage({
   const totalCategorias = categoriasOrdenadas.reduce((sum, c) => sum + c.total, 0);
 
   const saidasRecentes = [...((recentesDiego ?? []) as Saida[]), ...((recentesVitor ?? []) as Saida[])].sort((a, b) =>
-    (b.vencimento ?? b.data ?? b.created_at).localeCompare(a.vencimento ?? a.data ?? a.created_at)
+    b.created_at.localeCompare(a.created_at)
   );
 
   return (
@@ -354,6 +351,7 @@ export default async function DashboardPage({
           contaPorId={contaPorId}
           cartaoPorId={cartaoPorId}
           mesReferencia={mesReferencia}
+          pessoaAtiva={contaAtiva}
         />
       </section>
     </main>
