@@ -17,8 +17,6 @@ import type { Categoria, Pessoa, Saida } from "@/lib/domain/types";
 type Filtro = "Geral" | Pessoa;
 type Ordenacao = "recentes" | "valor";
 
-const FILTROS: Filtro[] = ["Geral", "Diego", "Vitor"];
-
 function formatDataCurta(saida: Pick<Saida, "data" | "created_at">): string {
   const { day, month } = dataParaCalculo(saida);
   return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`;
@@ -55,17 +53,24 @@ export function UltimasSaidas({
   contaPorId,
   cartaoPorId,
   mesReferencia,
+  pessoaAtiva,
 }: {
   saidas: Saida[];
   categorias: Categoria[];
   contaPorId: Map<string, string>;
   cartaoPorId: Map<string, string>;
   mesReferencia: { year: number; month: number };
+  pessoaAtiva: Pessoa;
 }) {
   const router = useRouter();
-  const [filtro, setFiltro] = useState<Filtro>("Geral");
+  // Começa no perfil ativo — Geral é uma visão opcional. A outra pessoa e o
+  // Geral ficam ao lado como alternativas.
+  const [filtro, setFiltro] = useState<Filtro>(pessoaAtiva);
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("recentes");
   const [abertaId, setAbertaId] = useState<string | null>(null);
+
+  const outraPessoa: Pessoa = pessoaAtiva === "Diego" ? "Vitor" : "Diego";
+  const FILTROS: Filtro[] = [pessoaAtiva, outraPessoa, "Geral"];
 
   const categoriaPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c.nome])), [categorias]);
 
@@ -77,7 +82,10 @@ export function UltimasSaidas({
   const exibidas = useMemo(() => {
     const filtradas = filtro === "Geral" ? saidas : saidas.filter((s) => s.pessoa === filtro);
     const ordenadas =
-      ordenacao === "valor" ? [...filtradas].sort((a, b) => b.total_cents - a.total_cents) : filtradas;
+      ordenacao === "valor"
+        ? [...filtradas].sort((a, b) => b.total_cents - a.total_cents)
+        : // Recência: pela data de criação do lançamento (o mais novo primeiro).
+          [...filtradas].sort((a, b) => b.created_at.localeCompare(a.created_at));
     return ordenadas.slice(0, 12);
   }, [saidas, filtro, ordenacao]);
 
@@ -95,7 +103,7 @@ export function UltimasSaidas({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Chip label="Por vencimento" selected={ordenacao === "recentes"} onClick={() => setOrdenacao("recentes")} />
+          <Chip label="Recentes" selected={ordenacao === "recentes"} onClick={() => setOrdenacao("recentes")} />
           <Chip label="Maior valor" selected={ordenacao === "valor"} onClick={() => setOrdenacao("valor")} />
           <Link
             href={`/lancamentos?ano=${mesReferencia.year}&mes=${mesReferencia.month}`}

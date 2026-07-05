@@ -57,7 +57,7 @@ function centsToInputValue(cents: number): string {
 }
 
 const ROW_GRID =
-  "hidden xl:grid xl:grid-cols-[14px_minmax(0,1.3fr)_minmax(0,0.9fr)_76px_minmax(0,0.9fr)_60px_110px_96px_64px] items-center gap-3";
+  "hidden xl:grid xl:grid-cols-[14px_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,0.8fr)_58px_58px_104px_92px_60px] items-center gap-3";
 
 function LinhaBase({ children }: { children: React.ReactNode }) {
   return <div className={`${ROW_GRID} border-b border-hairline px-3 py-2 last:border-b-0`}>{children}</div>;
@@ -357,6 +357,7 @@ function SaidaRow({
         <span className="type-caption truncate text-ink-2">{categoriaNome}</span>
         <span className="type-caption truncate text-ink-2">{saida.metodo}</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
+        <span className="type-caption figures text-ink-2">{formatDataCurta(saida.created_at)}</span>
         <span className="type-caption figures text-ink-2">{formatDataCurta(saida.vencimento)}</span>
         <Amount cents={saida.total_cents} semantic="none" className="type-body text-right text-ink" />
         <span className="flex justify-center">
@@ -385,7 +386,9 @@ function SaidaRow({
       <CartaoColapsado
         pessoa={saida.pessoa}
         titulo={nomeComParcela(saida.nome, saida.parcela)}
-        subtitulo={`${categoriaNome} · ${saida.metodo} · ${destinoNome} · ${formatDataCurta(saida.vencimento)}`}
+        subtitulo={`${categoriaNome} · ${saida.metodo} · ${destinoNome} · reg. ${formatDataCurta(saida.created_at)}${
+          saida.vencimento ? ` · venc. ${formatDataCurta(saida.vencimento)}` : ""
+        }`}
         valorCents={saida.total_cents}
         valorClassName="text-ink"
         statusChip={<StatusTag label={saida.status} done={saida.status === "Pago"} onClick={() => setEditando(true)} />}
@@ -536,6 +539,7 @@ function EntradaRow({
         <span className="type-caption truncate text-ink-3">—</span>
         <span className="type-caption truncate text-ink-2">Entrada</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
+        <span className="type-caption figures text-ink-2">{formatDataCurta(entrada.created_at)}</span>
         <span className="type-caption figures text-ink-2">{formatDataCurta(entrada.data)}</span>
         <Amount cents={entrada.quantia_cents} semantic="none" className="type-body text-right text-pos" />
         <span className="flex justify-center">
@@ -564,7 +568,7 @@ function EntradaRow({
       <CartaoColapsado
         pessoa={entrada.pessoa}
         titulo={entrada.nome}
-        subtitulo={`Entrada · ${destinoNome} · ${formatDataCurta(entrada.data)}`}
+        subtitulo={`Entrada · ${destinoNome} · reg. ${formatDataCurta(entrada.created_at)} · ${formatDataCurta(entrada.data)}`}
         valorCents={entrada.quantia_cents}
         valorClassName="text-pos"
         statusChip={
@@ -708,6 +712,7 @@ function TransferenciaRow({
         <span className="type-caption truncate text-ink-3">Transferência</span>
         <span className="type-caption truncate text-ink-3">—</span>
         <span className="type-caption truncate text-ink-2">{rota}</span>
+        <span className="type-caption figures text-ink-2">{formatDataCurta(transferencia.created_at)}</span>
         <span className="type-caption figures text-ink-2">{formatDataCurta(transferencia.data)}</span>
         <Amount cents={transferencia.valor_cents} semantic="none" className="type-body text-right text-ink-2" />
         <span className="flex justify-center">
@@ -736,7 +741,7 @@ function TransferenciaRow({
       <CartaoColapsado
         pessoa={transferencia.pessoa}
         titulo={transferencia.nome}
-        subtitulo={`${rota} · ${formatDataCurta(transferencia.data)}`}
+        subtitulo={`${rota} · reg. ${formatDataCurta(transferencia.created_at)} · ${formatDataCurta(transferencia.data)}`}
         valorCents={transferencia.valor_cents}
         valorClassName="text-ink-2"
         statusChip={<TransferenciaTag />}
@@ -773,7 +778,7 @@ export function LancamentosList({
   const [entradas, setEntradas] = useState(entradasIniciais);
   const [transferencias, setTransferencias] = useState(transferenciasIniciais);
   const [filtros, setFiltros] = useState<Filtros>(() => filtrosPadrao(pessoaAtiva));
-  const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "data", direcao: "desc" });
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "registro", direcao: "desc" });
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [catLote, setCatLote] = useState("");
@@ -823,7 +828,8 @@ export function LancamentosList({
       contaCartaoIds: [(s.metodo === "Débito" ? s.conta_id : s.cartao_id) ?? ""].filter(Boolean),
       origem: s.origem,
       statusGrupo: s.status === "Pago" ? "Pago" : "A pagar",
-      dataSort: s.vencimento ?? s.data ?? s.created_at,
+      vencimentoSort: s.vencimento ?? s.data ?? s.created_at,
+      registroSort: s.created_at,
       valorCents: s.total_cents,
       node: (
         <SaidaRow
@@ -848,7 +854,8 @@ export function LancamentosList({
       contaCartaoIds: [e.conta_destino_id],
       origem: e.origem ?? "Manual",
       statusGrupo: e.status === "Recebido" ? "Recebido" : "A receber",
-      dataSort: e.data,
+      vencimentoSort: e.data,
+      registroSort: e.created_at,
       valorCents: e.quantia_cents,
       node: (
         <EntradaRow
@@ -872,7 +879,8 @@ export function LancamentosList({
       contaCartaoIds: [t.de_conta_id, t.para_conta_id],
       origem: null,
       statusGrupo: null,
-      dataSort: t.data ?? t.created_at,
+      vencimentoSort: t.data ?? t.created_at,
+      registroSort: t.created_at,
       valorCents: t.valor_cents,
       node: (
         <TransferenciaRow
@@ -1110,7 +1118,18 @@ export function LancamentosList({
             />
             <span className="type-eyebrow text-ink-3">Método</span>
             <span className="type-eyebrow text-ink-3">Conta / Cartão</span>
-            <CabecalhoOrdenavel label="Data" campo="data" ordenacao={ordenacao} onClick={() => alternarOrdenacao("data")} />
+            <CabecalhoOrdenavel
+              label="Registro"
+              campo="registro"
+              ordenacao={ordenacao}
+              onClick={() => alternarOrdenacao("registro")}
+            />
+            <CabecalhoOrdenavel
+              label="Venc."
+              campo="vencimento"
+              ordenacao={ordenacao}
+              onClick={() => alternarOrdenacao("vencimento")}
+            />
             <CabecalhoOrdenavel
               label="Valor"
               campo="valor"
