@@ -74,7 +74,7 @@ export function IconMark({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: inner * 0.62,
+          fontSize: inner * 0.74,
           fontWeight: 700,
           lineHeight: 1,
           letterSpacing: -inner * 0.01,
