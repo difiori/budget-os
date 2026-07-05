@@ -47,9 +47,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Exclui assets do PWA (manifest, ícones, service worker) para que o iOS
-  // consiga buscá-los sem cair no redirecionamento de login.
+  // Exclui as rotas de API (fazem a própria autenticação, ex.: token do
+  // atalho) e os assets do PWA (manifest, ícones, service worker) do
+  // redirecionamento de login.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|manifest.json|manifest-icon|icon|apple-icon|sw.js).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|manifest.json|manifest-icon|icon|apple-icon|sw.js).*)",
   ],
 };
