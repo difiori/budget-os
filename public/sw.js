@@ -22,8 +22,7 @@ self.addEventListener("activate", (event) => {
 });
 
 function cacheavel(url) {
-  return url.pathname.startsWith("/_next/static") || url.pathname.startsWith("/manifest-icon") ||
-    url.pathname === "/icon" || url.pathname === "/apple-icon";
+  return url.pathname.startsWith("/_next/static") || url.pathname === "/app-icon.png";
 }
 
 self.addEventListener("fetch", (event) => {
