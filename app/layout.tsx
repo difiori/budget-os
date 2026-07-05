@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Poppins } from "next/font/google";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 // Poppins cobre os dois papéis (display e interface) — uma família só no
@@ -20,6 +21,26 @@ const poppinsSans = Poppins({
 export const metadata: Metadata = {
   title: "Budget OS",
   description: "Gestão financeira do casal — Diego & Vitor",
+  applicationName: "Budget OS",
+  // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
+  // tela de início, com título e barra de status próprios.
+  appleWebApp: {
+    capable: true,
+    title: "Budget OS",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // viewport-fit=cover: o conteúdo respeita os cantos/notch via safe-area
+  // (a barra de navegação mobile já usa env(safe-area-inset-bottom)).
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f4f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#121613" },
+  ],
 };
 
 /* Aplica o tema salvo (ou o do sistema) antes da primeira pintura,
@@ -52,7 +73,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="flex min-h-full flex-col bg-bg text-ink">{children}</body>
+      <body className="flex min-h-full flex-col bg-bg text-ink">
+        {children}
+        <PwaRegister />
+      </body>
     </html>
   );
 }
