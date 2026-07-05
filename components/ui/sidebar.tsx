@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, Landmark, LayoutDashboard, PlusCircle, Receipt, Settings, Tags } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Plus, Receipt, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AccountSwitcher } from "@/components/account-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useLancar } from "@/components/lancar/lancar-provider";
 import type { Pessoa } from "@/lib/domain/types";
 
 interface NavItem {
@@ -17,26 +18,35 @@ interface NavItem {
 
 const ITEMS: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
-  { href: "/lancar", label: "Lançar", icon: PlusCircle },
+  { href: "/lancamentos", label: "Lançamentos", icon: Receipt },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/categorias", label: "Categorias", icon: Tags },
   { href: "/contas", label: "Conta Bancária", icon: Landmark },
   { href: "/mes", label: "Mês", icon: CalendarRange },
-  { href: "/lancamentos", label: "Lançamentos", icon: Receipt },
   { href: "/config", label: "Configurações", icon: Settings },
 ];
 
 export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
+  const { abrir } = useLancar();
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-surface px-4 py-7 md:flex">
-      <div className="mb-9 px-3">
+      <div className="mb-6 px-3">
         <p className="text-[1.4rem] leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
           Budget OS
         </p>
         <p className="type-eyebrow mt-1 text-ink-3">Diego &amp; Vitor</p>
       </div>
+
+      <button
+        type="button"
+        onClick={abrir}
+        className="mb-4 flex items-center justify-center gap-2 rounded-sm bg-brand px-3 py-2.5 font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+      >
+        <Plus size={18} strokeWidth={2.3} />
+        <span className="type-label">Novo lançamento</span>
+      </button>
 
       <nav className="flex flex-1 flex-col gap-0.5">
         {ITEMS.map((item) => {

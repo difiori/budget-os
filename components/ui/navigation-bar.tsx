@@ -2,55 +2,158 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, Landmark, LayoutDashboard, PlusCircle, Receipt, Settings, Tags } from "lucide-react";
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
+import {
+  CalendarRange,
+  CreditCard,
+  Landmark,
+  LayoutDashboard,
+  MoreHorizontal,
+  Plus,
+  Receipt,
+  Settings,
+  Tags,
+  X,
+} from "lucide-react";
+import { useLancar } from "@/components/lancar/lancar-provider";
+import { AccountSwitcher } from "@/components/account-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SignOutButton } from "@/components/sign-out-button";
+import type { Pessoa } from "@/lib/domain/types";
 
-interface NavItem {
+interface Item {
   href: string;
   label: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }
 
-const ITEMS: NavItem[] = [
+// Abas do dia a dia; Lançar é o ＋ central; o resto mora em "Mais".
+const ESQUERDA: Item[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
-  { href: "/lancar", label: "Lançar", icon: PlusCircle },
-  { href: "/cartoes", label: "Cartões", icon: CreditCard },
-  { href: "/categorias", label: "Categ.", icon: Tags },
-  { href: "/contas", label: "Contas", icon: Landmark },
-  { href: "/mes", label: "Mês", icon: CalendarRange },
   { href: "/lancamentos", label: "Extrato", icon: Receipt },
-  { href: "/config", label: "Config", icon: Settings },
+];
+const DIREITA: Item[] = [{ href: "/cartoes", label: "Cartões", icon: CreditCard }];
+const MAIS: Item[] = [
+  { href: "/mes", label: "Mês", icon: CalendarRange },
+  { href: "/categorias", label: "Categorias", icon: Tags },
+  { href: "/contas", label: "Contas", icon: Landmark },
+  { href: "/config", label: "Configurações", icon: Settings },
 ];
 
-/** Barra fixa inferior (só mobile). O conteúdo compensa a altura com
- * padding-bottom no layout do app. */
-export function NavigationBar() {
+function TabLink({ item, active }: { item: Item; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={`flex flex-col items-center gap-1 pb-2 pt-2.5 transition-colors ${active ? "text-ink" : "text-ink-3"}`}
+    >
+      <Icon size={20} strokeWidth={active ? 2.2 : 1.7} />
+      <span className="text-[0.625rem] font-medium leading-none">{item.label}</span>
+    </Link>
+  );
+}
+
+/** Barra fixa inferior (só mobile): 4 abas + ＋ central (Lançar) + "Mais". */
+export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
+  const { abrir } = useLancar();
+  const [maisAberto, setMaisAberto] = useState(false);
+  const maisAtivo = MAIS.some((m) => m.href === pathname);
 
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-hairline bg-surface md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="grid grid-cols-8">
-        {ITEMS.map((item) => {
-          const active = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-1 pb-2 pt-2.5 transition-colors ${
-                active ? "text-ink" : "text-ink-3"
-              }`}
-            >
-              <Icon size={20} strokeWidth={active ? 2.2 : 1.7} />
-              <span className="text-[0.625rem] font-medium leading-none">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      {maisAberto && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-ink/45" onClick={() => setMaisAberto(false)} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mais"
+            className="absolute inset-x-0 bottom-0 flex flex-col gap-1 rounded-t-lg border-t border-hairline bg-surface p-3"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="mb-1 flex items-center justify-between px-2">
+              <p className="type-title text-ink">Mais</p>
+              <button
+                type="button"
+                onClick={() => setMaisAberto(false)}
+                aria-label="Fechar"
+                className="rounded-sm p-1.5 text-ink-2 hover:bg-bg hover:text-ink"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {MAIS.map((m) => {
+              const Icon = m.icon;
+              const active = pathname === m.href;
+              return (
+                <Link
+                  key={m.href}
+                  href={m.href}
+                  onClick={() => setMaisAberto(false)}
+                  className={`flex items-center gap-3 rounded-sm px-3 py-2.5 transition-colors ${
+                    active ? "bg-brand-tint font-semibold text-on-brand-tint" : "text-ink-2 hover:bg-bg hover:text-ink"
+                  }`}
+                >
+                  <Icon size={18} strokeWidth={1.8} />
+                  <span className="type-label">{m.label}</span>
+                </Link>
+              );
+            })}
+            <div className="mt-2 flex flex-col gap-3 border-t border-hairline px-1 pt-3">
+              <div>
+                <p className="type-eyebrow mb-2 text-ink-3">Vendo como</p>
+                <AccountSwitcher contaAtiva={contaAtiva} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="type-caption text-ink-2">Tema escuro</span>
+                  <ThemeToggle />
+                </div>
+                <SignOutButton />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-center border-t border-hairline bg-surface md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {ESQUERDA.map((item) => (
+          <TabLink key={item.href} item={item} active={pathname === item.href} />
+        ))}
+
+        {/* ＋ Lançar — ação central, em destaque */}
+        <div className="flex items-center justify-center">
+          <button
+            type="button"
+            onClick={abrir}
+            aria-label="Novo lançamento"
+            className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand shadow-raised transition-transform active:scale-95"
+          >
+            <Plus size={24} strokeWidth={2.4} />
+          </button>
+        </div>
+
+        {DIREITA.map((item) => (
+          <TabLink key={item.href} item={item} active={pathname === item.href} />
+        ))}
+
+        <button
+          type="button"
+          onClick={() => setMaisAberto(true)}
+          aria-label="Mais"
+          className={`flex flex-col items-center gap-1 pb-2 pt-2.5 transition-colors ${
+            maisAtivo ? "text-ink" : "text-ink-3"
+          }`}
+        >
+          <MoreHorizontal size={20} strokeWidth={maisAtivo ? 2.2 : 1.7} />
+          <span className="text-[0.625rem] font-medium leading-none">Mais</span>
+        </button>
+      </nav>
+    </>
   );
 }

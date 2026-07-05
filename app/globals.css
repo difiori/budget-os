@@ -134,6 +134,10 @@
 
 html {
   color-scheme: light;
+  /* Trava de segurança contra scroll horizontal no mobile. `clip` não cria
+   * contêiner de rolagem (não quebra os `position: sticky`, ao contrário de
+   * `hidden`). */
+  overflow-x: clip;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
