@@ -23,8 +23,10 @@ export const metadata: Metadata = {
   description: "Gestão financeira do casal — Diego & Vitor",
   applicationName: "Budget OS",
   icons: {
-    icon: "/app-icon4.png",
-    shortcut: "/app-icon4.png",
+    // Favicon simples (aba do navegador); o ícone rico fica pro apple-touch
+    // (tela de início) e pro manifest (PWA).
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
     apple: "/app-icon4.png",
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
