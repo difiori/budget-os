@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Calculator as CalcIcon, X } from "lucide-react";
 import { formatCentsToBRL } from "@/lib/domain/money";
+import { useLancar } from "@/components/lancar/lancar-provider";
 import { useToast } from "./toast";
 
 type Op = "+" | "−" | "×" | "÷";
@@ -50,7 +51,19 @@ function formatForDisplay(entry: string): string {
 
 export function Calculator() {
   const toast = useToast();
+  const { aberto: lancarAberto } = useLancar();
   const [aberta, setAberta] = useState(false);
+
+  // Com o Lançar aberto (overlay), a calculadora sai do canto inferior para o
+  // alto-direito no mobile (logo abaixo do cabeçalho do modal) — assim não
+  // cobre o botão "Salvar" lá embaixo. No desktop o modal é centralizado e
+  // sobra margem, então ela fica no lugar de sempre.
+  const fabPos = lancarAberto
+    ? "right-4 top-20 md:top-auto md:bottom-6 md:right-6"
+    : "right-4 bottom-24 md:bottom-6 md:right-6";
+  const painelPos = lancarAberto
+    ? "right-4 top-36 md:top-auto md:bottom-24 md:right-6"
+    : "right-4 bottom-40 md:bottom-24 md:right-6";
   const [entry, setEntry] = useState("0");
   const [acc, setAcc] = useState<number | null>(null);
   const [op, setOp] = useState<Op | null>(null);
@@ -176,7 +189,7 @@ export function Calculator() {
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
         aria-label={aberta ? "Fechar calculadora" : "Abrir calculadora"}
-        className="glow-brand fixed bottom-24 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand transition-transform hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
+        className={`glow-brand fixed z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand transition-transform hover:scale-105 active:scale-95 ${fabPos}`}
       >
         {aberta ? <X size={22} strokeWidth={2} /> : <CalcIcon size={22} strokeWidth={1.8} />}
       </button>
@@ -188,7 +201,7 @@ export function Calculator() {
           aria-label="Calculadora"
           tabIndex={-1}
           onKeyDown={onKeyDown}
-          className="glass calc-panel fixed bottom-40 right-4 z-[60] w-[19rem] max-w-[calc(100vw-2rem)] rounded-lg p-4 outline-none md:bottom-24 md:right-6"
+          className={`glass calc-panel fixed z-[60] w-[19rem] max-w-[calc(100vw-2rem)] rounded-lg p-4 outline-none ${painelPos}`}
         >
           {/* Visor + fita de somadora (a expressão corrente) */}
           <div className="mb-1 min-h-4 text-right">

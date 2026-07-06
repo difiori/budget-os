@@ -8,6 +8,9 @@ import type { Cartao, Categoria, Conta, Pessoa } from "@/lib/domain/types";
 
 interface LancarCtx {
   abrir: () => void;
+  /** Se o overlay de Lançar está aberto — a calculadora usa pra sair da
+   * frente do botão "Salvar" no mobile. */
+  aberto: boolean;
 }
 
 const Ctx = createContext<LancarCtx | null>(null);
@@ -47,7 +50,7 @@ export function LancarProvider({
   }
 
   return (
-    <Ctx.Provider value={{ abrir: () => setAberto(true) }}>
+    <Ctx.Provider value={{ abrir: () => setAberto(true), aberto }}>
       {children}
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
