@@ -51,6 +51,6 @@ export const config = {
   // atalho) e os assets do PWA (manifest, ícones, service worker) do
   // redirecionamento de login.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|manifest.json|app-icon3.png|sw.js).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|manifest.json|app-icon4.png|sw.js).*)",
   ],
 };
