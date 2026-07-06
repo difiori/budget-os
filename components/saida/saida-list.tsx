@@ -172,7 +172,7 @@ function SaidaRow({
   return (
     <div className="flex items-baseline justify-between gap-3 py-2">
       <div className="min-w-0">
-        <p className="type-body truncate text-ink">{nomeComParcela(saida.nome, saida.parcela)}</p>
+        <p className="truncate text-[0.875rem] text-ink">{nomeComParcela(saida.nome, saida.parcela)}</p>
         <p className="type-caption text-ink-3">
           {categoriaNome} · {formatDataCurta(saida.data)}
           {origemLabel ? ` · ${origemLabel}` : ""} ·{" "}

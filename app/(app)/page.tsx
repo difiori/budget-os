@@ -306,12 +306,12 @@ export default async function DashboardPage({
               {categoriasOrdenadas.map(({ categoria, total }) => (
                 <div key={categoria.id} className="flex flex-col gap-1.5">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="type-body truncate text-ink">{categoria.nome}</span>
+                    <span className="truncate text-[0.875rem] text-ink">{categoria.nome}</span>
                     <span className="flex shrink-0 items-baseline gap-2">
                       <span className="type-caption figures text-ink-3">
                         {totalCategorias > 0 ? Math.round((total / totalCategorias) * 100) : 0}%
                       </span>
-                      <Amount cents={total} semantic="none" className="type-body text-ink-2" />
+                      <Amount cents={total} semantic="none" className="text-[0.875rem] text-ink-2" />
                     </span>
                   </div>
                   <ProgressBar percent={(total / maiorCategoriaTotal) * 100} heightClassName="h-1" />
