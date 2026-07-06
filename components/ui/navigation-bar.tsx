@@ -65,7 +65,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
     <>
       {maisAberto && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-ink/45" onClick={() => setMaisAberto(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-scrim" onClick={() => setMaisAberto(false)} aria-hidden="true" />
           <div
             role="dialog"
             aria-modal="true"

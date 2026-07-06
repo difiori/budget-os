@@ -47,6 +47,10 @@
 
   --color-track: #e9eae3;
 
+  /* Scrim dos modais: sempre escurece (dim), nunca clareia — não pode herdar
+   * o `ink`, que inverte no tema escuro. */
+  --color-scrim: rgba(16, 22, 18, 0.5);
+
   /* Liquid Glass */
   --glass-bg: rgba(255, 255, 255, 0.62);
   --glass-border: rgba(20, 32, 25, 0.08);
@@ -98,6 +102,7 @@
   --color-on-chip-ink: #0c0d10;
 
   --color-track: #262a2f;
+  --color-scrim: rgba(0, 0, 0, 0.62);
 
   /* Liquid Glass — vidro fumê translúcido sobre o charcoal suave */
   --glass-bg: rgba(38, 43, 50, 0.55);
@@ -145,6 +150,7 @@
   --color-chip-ink: var(--color-chip-ink);
   --color-on-chip-ink: var(--color-on-chip-ink);
   --color-track: var(--color-track);
+  --color-scrim: var(--color-scrim);
 
   --radius-xs: var(--radius-xs);
   --radius-sm: var(--radius-sm);

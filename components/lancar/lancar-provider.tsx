@@ -54,7 +54,7 @@ export function LancarProvider({
       {children}
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-          <div className="absolute inset-0 bg-ink/45" onClick={fechar} aria-hidden="true" />
+          <div className="absolute inset-0 bg-scrim" onClick={fechar} aria-hidden="true" />
           <div
             role="dialog"
             aria-modal="true"
