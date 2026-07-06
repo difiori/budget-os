@@ -39,7 +39,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         <div
           role="presentation"
           onClick={() => responder(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-4"
         >
           <div
             role="alertdialog"
