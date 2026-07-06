@@ -1,47 +1,58 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------------ */
-/* Identidade visual — "extrato de banco privado".                           */
+/* Identidade visual — "néon sobre vidro fumê".                              */
 /*                                                                           */
-/* Papel mineral, tinta verde-garrafa, Poppins em todo o projeto (display e  */
-/* interface). Cor nunca decora: verde = dinheiro                           */
-/* positivo, granada = dinheiro negativo, âmbar = atenção. Diego e Vitor     */
-/* têm matizes próprios (ardósia / bronze) usados só em tags e pontos.       */
-/* Assinatura estrutural: régua contábil dupla sob os totais.                */
+/* O app é o ícone: charcoal profundo, aurora néon difusa ao fundo e         */
+/* superfícies de chrome em vidro fosco (Liquid Glass) que a desfocam.       */
+/* Cor nunca decora: verde néon = dinheiro que entra, coral = dinheiro que   */
+/* sai, ouro = atenção. As pessoas viram luz — Diego é azul elétrico, Vitor  */
+/* é laranja, o casal/geral é o verde da casa. Poppins em todo o projeto.    */
+/* Assinaturas: a aurora atrás do vidro + a régua contábil dupla.            */
 /* ------------------------------------------------------------------------ */
 
 :root {
+  color-scheme: light;
   --color-bg: #f4f4f0;
-  --color-surface: #fdfdfb;
+  --color-surface: #fbfbf8;
   --color-raised: #ffffff;
-  --color-ink: #1c2420;
-  --color-ink-2: #5c665f;
-  --color-ink-3: #656d66;
+  --color-ink: #16201b;
+  --color-ink-2: #566159;
+  --color-ink-3: #6b746c;
   --color-hairline: #e2e4dc;
   --color-hairline-strong: #c6cabd;
 
-  --color-brand: #1e4d3b;
-  --color-brand-hover: #163a2c;
-  --color-on-brand: #f2f7f2;
-  --color-brand-tint: #e5eee7;
-  --color-on-brand-tint: #1b3b2c;
+  /* Na luz, o néon do ícone vira esmeralda saturada pra segurar contraste
+   * em texto e botão; o brilho fica pros acentos e para a aurora. */
+  --color-brand: #07a35d;
+  --color-brand-hover: #058a4f;
+  --color-on-brand: #ffffff;
+  --color-brand-tint: #d9f5e6;
+  --color-on-brand-tint: #06553a;
 
-  --color-pos: #177149;
-  --color-neg: #a63a41;
-  --color-neg-tint: #f7e9e8;
-  --color-on-neg-tint: #6d2226;
-  --color-warn: #8a6420;
-  --color-warn-tint: #f4ecd8;
+  --color-pos: #0a9d5c;
+  --color-neg: #d3384a;
+  --color-neg-tint: #fbe4e6;
+  --color-on-neg-tint: #7a1f27;
+  --color-warn: #a9760f;
+  --color-warn-tint: #f6eccf;
 
-  --color-diego: #47608c;
-  --color-diego-tint: #e8edf5;
-  --color-vitor: #8c6238;
-  --color-vitor-tint: #f3ece1;
+  --color-diego: #2f6bd6;
+  --color-diego-tint: #e4ecfb;
+  --color-vitor: #d9691f;
+  --color-vitor-tint: #fbead9;
 
-  --color-chip-ink: #1c2420;
+  --color-chip-ink: #16201b;
   --color-on-chip-ink: #f4f4f0;
 
   --color-track: #e9eae3;
+
+  /* Liquid Glass */
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(20, 32, 25, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-blur: 16px;
+  --aurora-strength: 0.28;
 
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -53,39 +64,49 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #121613;
-  --color-surface: #181d19;
-  --color-raised: #1e241f;
-  --color-ink: #e9ece7;
-  --color-ink-2: #a4ada5;
-  --color-ink-3: #7a827b;
-  --color-hairline: rgba(233, 236, 231, 0.1);
-  --color-hairline-strong: rgba(233, 236, 231, 0.24);
+  color-scheme: dark;
+  /* Charcoal suave, não um void — o dark continua leve. */
+  --color-bg: #16191e;
+  --color-surface: #1e2229;
+  --color-raised: #262b32;
+  --color-ink: #eef2ee;
+  --color-ink-2: #a3aca4;
+  --color-ink-3: #767e77;
+  --color-hairline: rgba(255, 255, 255, 0.1);
+  --color-hairline-strong: rgba(255, 255, 255, 0.22);
 
-  --color-brand: #8fc4a8;
-  --color-brand-hover: #a8d4bc;
-  --color-on-brand: #0f241a;
-  --color-brand-tint: #223529;
-  --color-on-brand-tint: #bcdcc9;
+  /* O verde néon do cifrão. Texto quase-preto no botão pra ficar legível. */
+  --color-brand: #2ff08a;
+  --color-brand-hover: #4ff7a1;
+  --color-on-brand: #05130b;
+  --color-brand-tint: rgba(47, 240, 138, 0.14);
+  --color-on-brand-tint: #7bf3b4;
 
-  --color-pos: #6cc296;
-  --color-neg: #e08b90;
-  --color-neg-tint: #3a2325;
-  --color-on-neg-tint: #eec3c5;
-  --color-warn: #d4b06a;
-  --color-warn-tint: #34301e;
+  --color-pos: #2ff08a;
+  --color-neg: #ff5d6e;
+  --color-neg-tint: rgba(255, 93, 110, 0.15);
+  --color-on-neg-tint: #ff9ba6;
+  --color-warn: #f4c452;
+  --color-warn-tint: rgba(244, 196, 82, 0.14);
 
-  --color-diego: #93aed6;
-  --color-diego-tint: #222b3a;
-  --color-vitor: #cfa576;
-  --color-vitor-tint: #32291c;
+  --color-diego: #3aa7ff;
+  --color-diego-tint: rgba(58, 167, 255, 0.16);
+  --color-vitor: #ff8a3d;
+  --color-vitor-tint: rgba(255, 138, 61, 0.16);
 
-  --color-chip-ink: #e9ece7;
-  --color-on-chip-ink: #121613;
+  --color-chip-ink: #eef2ee;
+  --color-on-chip-ink: #0c0d10;
 
-  --color-track: #262d27;
+  --color-track: #262a2f;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px -14px rgba(0, 0, 0, 0.5);
+  /* Liquid Glass — vidro fumê translúcido sobre o charcoal suave */
+  --glass-bg: rgba(38, 43, 50, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-blur: 18px;
+  --aurora-strength: 0.5;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
 }
 
 @theme inline {
@@ -115,6 +136,11 @@
   --color-diego-tint: var(--color-diego-tint);
   --color-vitor: var(--color-vitor);
   --color-vitor-tint: var(--color-vitor-tint);
+
+  /* Casal / Geral reaproveita o verde da marca. */
+  --color-casal: var(--color-brand);
+  --color-casal-tint: var(--color-brand-tint);
+  --color-on-casal-tint: var(--color-on-brand-tint);
 
   --color-chip-ink: var(--color-chip-ink);
   --color-on-chip-ink: var(--color-on-chip-ink);
@@ -148,6 +174,48 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   transition: background-color 160ms ease, color 160ms ease;
+}
+
+/* Aurora néon — o campo vivo que dá o quê pro vidro fumê desfocar. Verde da
+ * casa no centro, azul do Diego numa borda, laranja do Vitor na outra. Fica
+ * atrás de todo o conteúdo (z-index negativo pinta acima do fundo, abaixo do
+ * fluxo). Discreta na luz, luminosa no escuro. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--aurora-strength);
+  background:
+    radial-gradient(38% 44% at 12% 4%, color-mix(in srgb, var(--color-diego) 60%, transparent), transparent 68%),
+    radial-gradient(40% 42% at 96% 16%, color-mix(in srgb, var(--color-vitor) 55%, transparent), transparent 66%),
+    radial-gradient(60% 55% at 50% 108%, color-mix(in srgb, var(--color-brand) 70%, transparent), transparent 70%);
+}
+
+/* Liquid Glass — superfície translúcida com desfoque, borda hairline e um
+ * brilho especular na aresta de cima (a "pegada" do material da Apple). Só nas
+ * superfícies de chrome/flutuantes, onde há aurora atrás pra refratar. */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), var(--shadow-raised);
+}
+
+/* Navegadores sem backdrop-filter caem num fundo sólido (sem transparência
+ * que comprometa a legibilidade). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--color-raised);
+  }
+}
+
+/* Halo néon discreto — só nos botões de ação flutuante, pra eles pulsarem
+ * com o verde do ícone sem espalhar brilho pela tela toda. */
+.glow-brand {
+  box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.35), 0 0 22px -6px var(--color-brand);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,6 +8,9 @@ import type { Cartao, Categoria, Conta, Pessoa } from "@/lib/domain/types";
 
 interface LancarCtx {
   abrir: () => void;
+  /** Se o overlay de Lançar está aberto — a calculadora usa pra sair da
+   * frente do botão "Salvar" no mobile. */
+  aberto: boolean;
 }
 
 const Ctx = createContext<LancarCtx | null>(null);
@@ -47,7 +50,7 @@ export function LancarProvider({
   }
 
   return (
-    <Ctx.Provider value={{ abrir: () => setAberto(true) }}>
+    <Ctx.Provider value={{ abrir: () => setAberto(true), aberto }}>
       {children}
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -56,7 +59,7 @@ export function LancarProvider({
             role="dialog"
             aria-modal="true"
             aria-label="Novo lançamento"
-            className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg border border-hairline bg-bg shadow-raised sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg"
+            className="glass relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg"
           >
             <div className="flex items-center justify-between border-b border-hairline bg-surface px-5 py-3.5">
               <p className="type-title text-ink">Novo lançamento</p>
@@ -70,7 +73,7 @@ export function LancarProvider({
               </button>
             </div>
             <div
-              className="flex-1 overflow-y-auto px-5 py-5"
+              className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
               <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} />

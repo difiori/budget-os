@@ -233,7 +233,7 @@ export default async function DashboardPage({
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card variant="raised" className="flex flex-col gap-5 p-6 lg:col-span-2">
+        <Card variant="glass" className="flex flex-col gap-5 p-6 lg:col-span-2">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="type-eyebrow text-ink-3">Saldo previsto · {labelMes(mesReferencia)}</p>
@@ -288,9 +288,37 @@ export default async function DashboardPage({
           <h2 className="type-title text-ink">Uso da renda</h2>
           <p className="type-caption text-ink-3">quanto das entradas já foi para saídas</p>
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:max-w-2xl">
+        {/* Duas colunas de uso (Diego, Vitor) + uma de "para onde foi" quando há
+            gastos — assim a linha ocupa a largura toda, sem espaço morto. */}
+        <div
+          className={`grid grid-cols-1 gap-5 sm:grid-cols-2 ${
+            categoriasOrdenadas.length > 0 ? "lg:grid-cols-3" : "lg:max-w-2xl"
+          }`}
+        >
           <UsoDaRendaCard pessoa="Diego" resumo={diego} />
           <UsoDaRendaCard pessoa="Vitor" resumo={vitor} />
+          {categoriasOrdenadas.length > 0 && (
+            <Card className="flex flex-col gap-3.5 sm:col-span-2 lg:col-span-1">
+              <div className="flex items-baseline justify-between">
+                <p className="type-title text-ink">Saídas por categoria</p>
+                <p className="type-caption text-ink-3">{labelMes(mesReferencia)}</p>
+              </div>
+              {categoriasOrdenadas.map(({ categoria, total }) => (
+                <div key={categoria.id} className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="type-body truncate text-ink">{categoria.nome}</span>
+                    <span className="flex shrink-0 items-baseline gap-2">
+                      <span className="type-caption figures text-ink-3">
+                        {totalCategorias > 0 ? Math.round((total / totalCategorias) * 100) : 0}%
+                      </span>
+                      <Amount cents={total} semantic="none" className="type-body text-ink-2" />
+                    </span>
+                  </div>
+                  <ProgressBar percent={(total / maiorCategoriaTotal) * 100} heightClassName="h-1" />
+                </div>
+              ))}
+            </Card>
+          )}
         </div>
       </section>
 
@@ -309,39 +337,12 @@ export default async function DashboardPage({
         </Card>
       </section>
 
-      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <section>
-          <h2 className="type-title mb-3 text-ink">Entradas x saídas — últimos 6 meses</h2>
-          <Card>
-            <TrendChart labels={labelsTrend} gastos={gastosTrend} entradas={entradasTrend} />
-          </Card>
-        </section>
-
-        {categoriasOrdenadas.length > 0 && (
-          <section>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="type-title text-ink">Saídas por categoria</h2>
-              <p className="type-caption text-ink-3">{labelMes(mesReferencia)}</p>
-            </div>
-            <Card className="flex flex-col gap-3.5">
-              {categoriasOrdenadas.map(({ categoria, total }) => (
-                <div key={categoria.id} className="flex flex-col gap-1.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="type-body truncate text-ink">{categoria.nome}</span>
-                    <span className="flex shrink-0 items-baseline gap-2">
-                      <span className="type-caption figures text-ink-3">
-                        {totalCategorias > 0 ? Math.round((total / totalCategorias) * 100) : 0}%
-                      </span>
-                      <Amount cents={total} semantic="none" className="type-body text-ink-2" />
-                    </span>
-                  </div>
-                  <ProgressBar percent={(total / maiorCategoriaTotal) * 100} heightClassName="h-1" />
-                </div>
-              ))}
-            </Card>
-          </section>
-        )}
-      </div>
+      <section className="mt-8">
+        <h2 className="type-title mb-3 text-ink">Entradas x saídas — últimos 6 meses</h2>
+        <Card>
+          <TrendChart labels={labelsTrend} gastos={gastosTrend} entradas={entradasTrend} />
+        </Card>
+      </section>
 
       <section className="mt-8">
         <h2 className="type-title mb-3 text-ink">Últimas saídas</h2>

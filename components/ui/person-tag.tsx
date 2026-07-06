@@ -6,8 +6,8 @@ const TAG: Record<Pessoa, string> = {
 };
 
 const DOT: Record<Pessoa, string> = {
-  Diego: "bg-diego",
-  Vitor: "bg-vitor",
+  Diego: "bg-diego text-diego",
+  Vitor: "bg-vitor text-vitor",
 };
 
 export function PersonTag({ pessoa }: { pessoa: Pessoa }) {
@@ -23,7 +23,7 @@ export function PersonDot({ pessoa, className = "" }: { pessoa: Pessoa; classNam
   return (
     <span
       title={pessoa}
-      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT[pessoa]} ${className}`.trim()}
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full shadow-[0_0_7px_0_currentColor] ${DOT[pessoa]} ${className}`.trim()}
       aria-label={pessoa}
     />
   );

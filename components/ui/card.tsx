@@ -1,15 +1,16 @@
 import type { HTMLAttributes } from "react";
 
-type CardVariant = "surface" | "raised" | "tint";
+type CardVariant = "surface" | "raised" | "tint" | "glass";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;
 }
 
 const VARIANT_CLASSES: Record<CardVariant, string> = {
-  surface: "bg-surface border border-hairline",
-  raised: "bg-raised border border-hairline shadow-raised",
+  surface: "glass",
+  raised: "glass",
   tint: "bg-brand-tint",
+  glass: "glass",
 };
 
 export function Card({ variant = "surface", className = "", ...props }: CardProps) {
