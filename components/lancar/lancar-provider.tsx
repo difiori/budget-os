@@ -70,7 +70,7 @@ export function LancarProvider({
               </button>
             </div>
             <div
-              className="flex-1 overflow-y-auto px-5 py-5"
+              className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
               <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} />

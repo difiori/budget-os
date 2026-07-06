@@ -7,7 +7,6 @@ import { addMonths, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
-import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { MESES_ABREV } from "@/lib/format/meses";
@@ -259,8 +258,8 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
       {/* Duas colunas no desktop: campos à esquerda, recibo + salvar fixos à
           direita. No mobile empilha na ordem natural (valor → campos → recibo
           → salvar). */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10">
-      <div className="flex flex-col gap-6">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10">
+      <div className="flex min-w-0 flex-col gap-6">
       <Card variant="raised" className="flex flex-col gap-1 p-6">
         <label htmlFor="nome" className="type-eyebrow text-ink-3">
           Nome
@@ -409,15 +408,16 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
         <div>
           <p className="type-label mb-2 text-ink-2">Categoria</p>
           {pessoaSelecionada ? (
-            <Combobox
-              className="max-w-xs"
-              options={categoriasFiltradas.map((c) => ({ value: c.id, label: c.nome }))}
-              value={categoriaId}
-              onChange={setCategoriaId}
-              placeholder="Selecionar categoria"
-              searchPlaceholder="Buscar categoria"
-              clearable
-            />
+            <div className="flex flex-wrap gap-1.5">
+              {categoriasFiltradas.map((c) => (
+                <Chip
+                  key={c.id}
+                  label={c.nome}
+                  selected={categoriaId === c.id}
+                  onClick={() => setCategoriaId(categoriaId === c.id ? "" : c.id)}
+                />
+              ))}
+            </div>
           ) : (
             <p className="type-caption text-ink-3">
               Escolha {modo === "Credito" ? "o cartão" : "a conta"} acima — as categorias dependem de quem é o gasto.
@@ -437,7 +437,9 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
           required
           value={dataInput}
           onChange={(event) => setDataInput(event.target.value)}
-          className={`${inputClasses} md:w-64`}
+          // `appearance-none` + `max-w-full`: o date nativo do iOS tem largura
+          // intrínseca e não encolhe sozinho — sem isso ele estoura no mobile.
+          className={`${inputClasses} max-w-full appearance-none md:w-64`}
         />
       </div>
 
