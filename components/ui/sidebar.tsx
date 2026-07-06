@@ -31,7 +31,7 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const { abrir } = useLancar();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-surface px-4 py-7 md:flex">
+    <aside className="glass sticky top-0 hidden h-screen w-60 shrink-0 flex-col px-4 py-7 md:flex">
       <div className="mb-6 px-3">
         <p className="text-[1.4rem] leading-tight text-ink" style={{ fontFamily: "var(--font-display)" }}>
           Budget OS

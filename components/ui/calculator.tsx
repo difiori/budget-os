@@ -176,7 +176,7 @@ export function Calculator() {
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
         aria-label={aberta ? "Fechar calculadora" : "Abrir calculadora"}
-        className="fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand shadow-raised transition-transform hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
+        className="glow-brand fixed bottom-24 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand transition-transform hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
       >
         {aberta ? <X size={22} strokeWidth={2} /> : <CalcIcon size={22} strokeWidth={1.8} />}
       </button>
@@ -188,7 +188,7 @@ export function Calculator() {
           aria-label="Calculadora"
           tabIndex={-1}
           onKeyDown={onKeyDown}
-          className="calc-panel fixed bottom-40 right-4 z-40 w-[19rem] max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-raised p-4 shadow-raised outline-none md:bottom-24 md:right-6"
+          className="glass calc-panel fixed bottom-40 right-4 z-40 w-[19rem] max-w-[calc(100vw-2rem)] rounded-lg p-4 outline-none md:bottom-24 md:right-6"
         >
           {/* Visor + fita de somadora (a expressão corrente) */}
           <div className="mb-1 min-h-4 text-right">

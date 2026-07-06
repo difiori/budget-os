@@ -70,7 +70,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
             role="dialog"
             aria-modal="true"
             aria-label="Mais"
-            className="absolute inset-x-0 bottom-0 flex flex-col gap-1 rounded-t-lg border-t border-hairline bg-surface p-3"
+            className="glass absolute inset-x-0 bottom-0 flex flex-col gap-1 rounded-t-lg p-3"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
             <div className="mb-1 flex items-center justify-between px-2">
@@ -119,7 +119,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
       )}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-center border-t border-hairline bg-surface md:hidden"
+        className="glass fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-center md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {ESQUERDA.map((item) => (
@@ -132,7 +132,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
             type="button"
             onClick={abrir}
             aria-label="Novo lançamento"
-            className="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand shadow-raised transition-transform active:scale-95"
+            className="glow-brand -mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand transition-transform active:scale-95"
           >
             <Plus size={24} strokeWidth={2.4} />
           </button>

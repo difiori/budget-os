@@ -233,7 +233,7 @@ export default async function DashboardPage({
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card variant="raised" className="flex flex-col gap-5 p-6 lg:col-span-2">
+        <Card variant="glass" className="flex flex-col gap-5 p-6 lg:col-span-2">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="type-eyebrow text-ink-3">Saldo previsto · {labelMes(mesReferencia)}</p>
