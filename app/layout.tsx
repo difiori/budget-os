@@ -23,9 +23,9 @@ export const metadata: Metadata = {
   description: "Gestão financeira do casal — Diego & Vitor",
   applicationName: "Budget OS",
   icons: {
-    icon: "/app-icon3.png",
-    shortcut: "/app-icon3.png",
-    apple: "/app-icon3.png",
+    icon: "/app-icon4.png",
+    shortcut: "/app-icon4.png",
+    apple: "/app-icon4.png",
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
   // tela de início, com título e barra de status próprios.
