@@ -56,6 +56,9 @@
   --glass-border: rgba(20, 32, 25, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.9);
   --glass-blur: 16px;
+  /* Modal sobre o scrim escuro fica cinza se translúcido demais — usa um vidro
+   * mais claro/opaco só nesse contexto. */
+  --glass-modal-bg: rgba(255, 255, 255, 0.9);
   --aurora-strength: 0.28;
 
   --radius-xs: 4px;
@@ -109,6 +112,7 @@
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.16);
   --glass-blur: 18px;
+  --glass-modal-bg: rgba(34, 39, 46, 0.88);
   --aurora-strength: 0.5;
 
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -16px rgba(0, 0, 0, 0.6);
@@ -208,6 +212,12 @@ body::before {
   backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 0 var(--glass-highlight), var(--shadow-raised);
+}
+
+/* Variante do vidro para superfícies sobre o scrim (modais): fundo mais
+ * opaco pra não acinzentar. Vem depois de .glass pra vencer o background. */
+.glass-modal {
+  background: var(--glass-modal-bg);
 }
 
 /* Navegadores sem backdrop-filter caem num fundo sólido (sem transparência

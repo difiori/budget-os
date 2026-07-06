@@ -59,7 +59,7 @@ export function LancarProvider({
             role="dialog"
             aria-modal="true"
             aria-label="Novo lançamento"
-            className="glass relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg"
+            className="glass glass-modal relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-lg sm:max-h-[90vh] sm:max-w-4xl sm:rounded-lg"
           >
             <div className="flex items-center justify-between border-b border-hairline bg-surface px-5 py-3.5">
               <p className="type-title text-ink">Novo lançamento</p>
