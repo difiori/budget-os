@@ -34,7 +34,7 @@ const ESQUERDA: Item[] = [
 ];
 const DIREITA: Item[] = [{ href: "/cartoes", label: "Cartões", icon: CreditCard }];
 const MAIS: Item[] = [
-  { href: "/mes", label: "Mês", icon: CalendarRange },
+  { href: "/mes", label: "Resumo Mensal", icon: CalendarRange },
   { href: "/categorias", label: "Categorias", icon: Tags },
   { href: "/contas", label: "Contas", icon: Landmark },
   { href: "/config", label: "Configurações", icon: Settings },

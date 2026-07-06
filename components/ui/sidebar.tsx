@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Plus, Receipt, Settings, Tags } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AccountSwitcher } from "@/components/account-switcher";
@@ -22,7 +22,7 @@ const ITEMS: NavItem[] = [
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/categorias", label: "Categorias", icon: Tags },
   { href: "/contas", label: "Conta Bancária", icon: Landmark },
-  { href: "/mes", label: "Mês", icon: CalendarRange },
+  { href: "/mes", label: "Resumo Mensal", icon: CalendarRange },
   { href: "/config", label: "Configurações", icon: Settings },
 ];
 
@@ -42,9 +42,8 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
       <button
         type="button"
         onClick={abrir}
-        className="mb-4 flex items-center justify-center gap-2 rounded-sm bg-brand px-3 py-2.5 font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+        className="mb-4 flex items-center justify-center rounded-sm bg-brand px-3 py-2.5 font-semibold text-on-brand transition-colors hover:bg-brand-hover"
       >
-        <Plus size={18} strokeWidth={2.3} />
         <span className="type-label">Novo lançamento</span>
       </button>
 

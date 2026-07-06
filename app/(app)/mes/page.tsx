@@ -111,7 +111,7 @@ export default async function MesPage({
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
-      <PageHeader title="Mês" subtitle={pessoa === "Casal" ? "Visão do casal" : `Visão de ${pessoa}`}>
+      <PageHeader title="Resumo Mensal" subtitle={pessoa === "Casal" ? "Visão do casal" : `Visão de ${pessoa}`}>
         <MonthSelector
           label={labelMes(mesReferencia)}
           hrefAnterior={monthHref(pessoa, mesAnterior)}
