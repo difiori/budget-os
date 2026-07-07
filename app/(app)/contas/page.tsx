@@ -20,6 +20,14 @@ function contasHref(escopo: Escopo, mes: CalendarDate) {
   return `/contas?pessoa=${escopo}&ano=${mes.year}&mes=${mes.month}`;
 }
 
+/** Cor do saldo considerando cheque especial: positivo neutro, negativo dentro
+ * do limite em âmbar (usando cheque especial), abaixo do limite em granada. */
+function corSaldo(saldoCents: number, limiteCents: number): string {
+  if (saldoCents >= 0) return "text-ink";
+  if (saldoCents >= -limiteCents) return "text-warn";
+  return "text-neg";
+}
+
 export default async function ContasPage({
   searchParams,
 }: {
@@ -41,7 +49,10 @@ export default async function ContasPage({
   const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
   const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
 
-  let contasQuery = supabase.from("conta").select("id, nome, dono, saldo_atual_cents").order("nome");
+  let contasQuery = supabase
+    .from("conta")
+    .select("id, nome, dono, saldo_atual_cents, limite_cheque_especial_cents")
+    .order("nome");
   if (escopo !== "Casal") contasQuery = contasQuery.eq("dono", escopo);
 
   let metasQuery = supabase
@@ -167,10 +178,24 @@ export default async function ContasPage({
                 <PersonTag pessoa={view.conta.dono} />
               </div>
 
-              <div>
-                <p className="type-caption text-ink-3">Saldo disponível</p>
-                <Amount cents={view.conta.saldo_atual_cents} semantic="both" className="type-display text-ink" />
-              </div>
+              {(() => {
+                const saldo = view.conta.saldo_atual_cents;
+                const limite = view.conta.limite_cheque_especial_cents ?? 0;
+                return (
+                  <div>
+                    <p className="type-caption text-ink-3">Saldo</p>
+                    <Amount cents={saldo} semantic="none" className={`type-display ${corSaldo(saldo, limite)}`} />
+                    {limite > 0 && (
+                      <p className="type-caption mt-0.5 text-ink-3">
+                        Disponível pra gastar {formatCentsToBRL(saldo + limite)}
+                        {saldo < 0
+                          ? ` · usando ${formatCentsToBRL(Math.min(-saldo, limite))} de ${formatCentsToBRL(limite)}`
+                          : ` · cheque especial ${formatCentsToBRL(limite)}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3 border-t border-hairline pt-3">
                 <div>
