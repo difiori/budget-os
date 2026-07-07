@@ -14,6 +14,8 @@ import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { nomeComParcela, nomeSemParcela } from "@/lib/domain/parcelamento";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import {
+  alternarStatusEntrada,
+  alternarStatusSaida,
   atualizarEntrada,
   atualizarSaida,
   atualizarTransferencia,
@@ -188,6 +190,7 @@ function SaidaRow({
   destinoNome,
   onRemovido,
   onRestaurado,
+  onStatusAlterado,
 }: {
   saida: Saida;
   categorias: Categoria[];
@@ -195,6 +198,7 @@ function SaidaRow({
   destinoNome: string;
   onRemovido: (id: string) => void;
   onRestaurado: (saida: Saida) => void;
+  onStatusAlterado: (id: string, novo: SaidaStatus) => void;
 }) {
   const [editando, setEditando] = useState(false);
   // Pré-preenche com o nome base (sem o sufixo "NN/NN"), que a parcela já
@@ -272,6 +276,33 @@ function SaidaRow({
         onRestaurado(saida);
       },
     });
+  }
+
+  /** Alterna Pago ↔ A pagar direto pela tag (otimista), sem abrir a edição. */
+  function alternarPago() {
+    const anterior = saida.status;
+    const novo: SaidaStatus = anterior === "Pago" ? "A pagar" : "Pago";
+    onStatusAlterado(saida.id, novo);
+    startTransition(async () => {
+      const { error } = await alternarStatusSaida(saida.id);
+      if (error) {
+        onStatusAlterado(saida.id, anterior);
+        toast(error);
+      }
+    });
+  }
+
+  /** Reabre a edição sempre do estado atual da saída (evita divergência com
+   * o que foi alterado pela tag). */
+  function abrirEdicao() {
+    setNome(nomeSemParcela(saida.nome, saida.parcela));
+    setValor(centsToInputValue(saida.total_cents));
+    setData(isoParaInput(saida.data));
+    setVencimento(isoParaInput(saida.vencimento));
+    setParcela(saida.parcela ?? "");
+    setCategoriaId(saida.categoria_id ?? "");
+    setStatus(saida.status);
+    setEditando(true);
   }
 
   if (editando) {
@@ -361,12 +392,12 @@ function SaidaRow({
         <span className="type-caption figures text-ink-2">{formatDataCurta(saida.vencimento)}</span>
         <Amount cents={saida.total_cents} semantic="none" className="type-body text-right text-ink" />
         <span className="flex justify-center">
-          <StatusTag label={saida.status} done={saida.status === "Pago"} onClick={() => setEditando(true)} />
+          <StatusTag label={saida.status} done={saida.status === "Pago"} onClick={alternarPago} />
         </span>
         <span className="flex justify-end gap-0.5">
           <button
             type="button"
-            onClick={() => setEditando(true)}
+            onClick={abrirEdicao}
             aria-label="Editar"
             className="rounded-sm p-1.5 text-ink-3 hover:bg-bg hover:text-ink"
           >
@@ -391,8 +422,8 @@ function SaidaRow({
         }`}
         valorCents={saida.total_cents}
         valorClassName="text-ink"
-        statusChip={<StatusTag label={saida.status} done={saida.status === "Pago"} onClick={() => setEditando(true)} />}
-        onEditar={() => setEditando(true)}
+        statusChip={<StatusTag label={saida.status} done={saida.status === "Pago"} onClick={alternarPago} />}
+        onEditar={abrirEdicao}
         onExcluir={remover}
         excluindo={isPending}
       />
@@ -406,12 +437,14 @@ function EntradaRow({
   contas,
   onRemovido,
   onRestaurado,
+  onStatusAlterado,
 }: {
   entrada: Entrada;
   destinoNome: string;
   contas: { id: string; nome: string }[];
   onRemovido: (id: string) => void;
   onRestaurado: (entrada: Entrada) => void;
+  onStatusAlterado: (id: string, novo: EntradaStatus) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(entrada.nome);
@@ -475,6 +508,28 @@ function EntradaRow({
         onRestaurado(entrada);
       },
     });
+  }
+
+  function alternarRecebido() {
+    const anterior = entrada.status;
+    const novo: EntradaStatus = anterior === "Recebido" ? "Não recebido" : "Recebido";
+    onStatusAlterado(entrada.id, novo);
+    startTransition(async () => {
+      const { error } = await alternarStatusEntrada(entrada.id);
+      if (error) {
+        onStatusAlterado(entrada.id, anterior);
+        toast(error);
+      }
+    });
+  }
+
+  function abrirEdicao() {
+    setNome(entrada.nome);
+    setValor(centsToInputValue(entrada.quantia_cents));
+    setData(isoParaInput(entrada.data));
+    setStatus(entrada.status);
+    setContaDestinoId(entrada.conta_destino_id);
+    setEditando(true);
   }
 
   if (editando) {
@@ -543,12 +598,12 @@ function EntradaRow({
         <span className="type-caption figures text-ink-2">{formatDataCurta(entrada.data)}</span>
         <Amount cents={entrada.quantia_cents} semantic="none" className="type-body text-right text-pos" />
         <span className="flex justify-center">
-          <StatusTag label={statusLabel} done={entrada.status === "Recebido"} onClick={() => setEditando(true)} />
+          <StatusTag label={statusLabel} done={entrada.status === "Recebido"} onClick={alternarRecebido} />
         </span>
         <span className="flex justify-end gap-0.5">
           <button
             type="button"
-            onClick={() => setEditando(true)}
+            onClick={abrirEdicao}
             aria-label="Editar"
             className="rounded-sm p-1.5 text-ink-3 hover:bg-bg hover:text-ink"
           >
@@ -572,9 +627,9 @@ function EntradaRow({
         valorCents={entrada.quantia_cents}
         valorClassName="text-pos"
         statusChip={
-          <StatusTag label={statusLabel} done={entrada.status === "Recebido"} onClick={() => setEditando(true)} />
+          <StatusTag label={statusLabel} done={entrada.status === "Recebido"} onClick={alternarRecebido} />
         }
-        onEditar={() => setEditando(true)}
+        onEditar={abrirEdicao}
         onExcluir={remover}
         excluindo={isPending}
       />
@@ -840,6 +895,9 @@ export function LancamentosList({
           destinoNome={destinoDaSaida(s)}
           onRemovido={(id) => setSaidas((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(saida) => setSaidas((prev) => [...prev, saida])}
+          onStatusAlterado={(id, novo) =>
+            setSaidas((prev) => prev.map((x) => (x.id === id ? { ...x, status: novo } : x)))
+          }
         />
       ),
     }));
@@ -865,6 +923,9 @@ export function LancamentosList({
           contas={contasDaPessoa(e.pessoa)}
           onRemovido={(id) => setEntradas((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(entrada) => setEntradas((prev) => [...prev, entrada])}
+          onStatusAlterado={(id, novo) =>
+            setEntradas((prev) => prev.map((x) => (x.id === id ? { ...x, status: novo } : x)))
+          }
         />
       ),
     }));

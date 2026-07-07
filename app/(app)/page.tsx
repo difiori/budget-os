@@ -7,6 +7,8 @@ import { PersonTag } from "@/components/ui/person-tag";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
+import { SaldoPorConta } from "@/components/dashboard/saldo-por-conta";
+import { ContasAPagar } from "@/components/dashboard/contas-a-pagar";
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -145,7 +147,7 @@ export default async function DashboardPage({
     { data: recentesDiego },
     { data: recentesVitor },
   ] = await Promise.all([
-    supabase.from("conta").select("id, nome, dono, saldo_atual_cents"),
+    supabase.from("conta").select("id, nome, dono, saldo_atual_cents, limite_cheque_especial_cents"),
     // Paginado: a tabela `saida` passa de 1000 linhas, e o limite padrão do
     // PostgREST truncaria silenciosamente o cálculo do saldo previsto.
     fetchAllRows<Saida>((from, to) =>
@@ -222,6 +224,22 @@ export default async function DashboardPage({
     b.created_at.localeCompare(a.created_at)
   );
 
+  // Contas a pagar (do perfil ativo): saídas ainda não pagas, vencimento mais
+  // próximo primeiro. Mostra as 12 primeiras; o total considera todas.
+  const aPagarTodas = todasSaidas
+    .filter((s) => s.pessoa === contaAtiva && s.status !== "Pago")
+    .sort((a, b) =>
+      (a.vencimento ?? a.data ?? a.created_at).localeCompare(b.vencimento ?? b.data ?? b.created_at)
+    );
+  const aPagarTotal = aPagarTodas.reduce((sum, s) => sum + s.total_cents, 0);
+  const aPagarTop = aPagarTodas.slice(0, 12);
+  const aPagarRestante = aPagarTodas.length - aPagarTop.length;
+  const destinoAPagar: Record<string, string> = {};
+  for (const s of aPagarTop) {
+    const id = s.metodo === "Débito" ? s.conta_id : s.cartao_id;
+    destinoAPagar[s.id] = (id && (s.metodo === "Débito" ? contaPorId.get(id) : cartaoPorId.get(id))) ?? "—";
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
       <PageHeader title="Painel" subtitle={`Vendo como ${contaAtiva}`}>
@@ -281,6 +299,16 @@ export default async function DashboardPage({
             </div>
           </div>
         </Card>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <SaldoPorConta contas={todasContas} />
+        <ContasAPagar
+          saidas={aPagarTop}
+          destinoPorId={destinoAPagar}
+          totalCents={aPagarTotal}
+          restante={aPagarRestante}
+        />
       </div>
 
       <section className="mt-8">

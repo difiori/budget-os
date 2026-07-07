@@ -409,6 +409,85 @@ export async function marcarEntradasComoRecebidas(ids: string[]): Promise<LoteRe
   return { error: null, feitas };
 }
 
+/** Alterna UMA saída entre "A pagar" e "Pago" e ajusta o saldo da conta-alvo.
+ * Lê o estado atual no servidor (não confia no cliente pra mutação de saldo). */
+export async function alternarStatusSaida(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const editadoPor = await editorAutenticado(supabase);
+  if (!editadoPor) return { error: "Não foi possível identificar quem está editando." };
+
+  const { data: s, error } = await supabase
+    .from("saida")
+    .select("total_cents, metodo, conta_id, cartao_id, status")
+    .eq("id", id)
+    .single();
+  if (error || !s) return { error: error?.message ?? "Saída não encontrada." };
+
+  const anterior = s.status as SaidaStatus;
+  const novo: SaidaStatus = anterior === "Pago" ? "A pagar" : "Pago";
+
+  const { error: upErr } = await supabase
+    .from("saida")
+    .update({ status: novo, editado_por: editadoPor, atualizado_em: new Date().toISOString() })
+    .eq("id", id);
+  if (upErr) return { error: upErr.message };
+
+  const contaAlvo = await contaAlvoDaSaida(
+    supabase,
+    s.metodo as MetodoPagamento,
+    s.conta_id as string | null,
+    s.cartao_id as string | null
+  );
+  const erroSaldo = await ajustarSaldoSaida(
+    supabase,
+    contaAlvo,
+    anterior,
+    novo,
+    s.total_cents as number,
+    s.total_cents as number
+  );
+  if (erroSaldo) return { error: `Status alterado, mas o saldo não foi ajustado: ${erroSaldo}` };
+
+  revalidarTudo();
+  return { error: null };
+}
+
+/** Alterna UMA entrada entre "Não recebido" e "Recebido" e ajusta o saldo. */
+export async function alternarStatusEntrada(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const editadoPor = await editorAutenticado(supabase);
+  if (!editadoPor) return { error: "Não foi possível identificar quem está editando." };
+
+  const { data: e, error } = await supabase
+    .from("entrada")
+    .select("quantia_cents, conta_destino_id, status")
+    .eq("id", id)
+    .single();
+  if (error || !e) return { error: error?.message ?? "Entrada não encontrada." };
+
+  const anterior = e.status as EntradaStatus;
+  const novo: EntradaStatus = anterior === "Recebido" ? "Não recebido" : "Recebido";
+
+  const { error: upErr } = await supabase
+    .from("entrada")
+    .update({ status: novo, editado_por: editadoPor, atualizado_em: new Date().toISOString() })
+    .eq("id", id);
+  if (upErr) return { error: upErr.message };
+
+  const erroSaldo = await ajustarSaldoEntrada(
+    supabase,
+    e.conta_destino_id as string,
+    anterior,
+    novo,
+    e.quantia_cents as number,
+    e.quantia_cents as number
+  );
+  if (erroSaldo) return { error: `Status alterado, mas o saldo não foi ajustado: ${erroSaldo}` };
+
+  revalidarTudo();
+  return { error: null };
+}
+
 /** Troca a categoria de várias saídas de uma vez (não afeta saldo). */
 export async function definirCategoriaEmLote(ids: string[], categoriaId: string | null): Promise<ActionResult> {
   if (ids.length === 0) return { error: null };

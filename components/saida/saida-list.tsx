@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { nomeComParcela, nomeSemParcela } from "@/lib/domain/parcelamento";
 import { parseCentsFromBRL } from "@/lib/domain/money";
-import { atualizarSaida, excluirSaida } from "../../app/(app)/lancamentos/actions";
+import { alternarStatusSaida, atualizarSaida, excluirSaida } from "../../app/(app)/lancamentos/actions";
 import type { Categoria, Saida, SaidaStatus } from "@/lib/domain/types";
 
 const STATUS_SAIDA: SaidaStatus[] = ["A pagar", "Pago"];
@@ -85,6 +85,17 @@ function SaidaRow({
         return;
       }
       setEditando(false);
+      onMutou();
+    });
+  }
+
+  function alternarPago() {
+    startTransition(async () => {
+      const { error } = await alternarStatusSaida(saida.id);
+      if (error) {
+        setErro(error);
+        return;
+      }
       onMutou();
     });
   }
@@ -175,11 +186,21 @@ function SaidaRow({
         <p className="truncate text-[0.875rem] text-ink">{nomeComParcela(saida.nome, saida.parcela)}</p>
         <p className="type-caption text-ink-3">
           {categoriaNome} · {formatDataCurta(saida.data)}
-          {origemLabel ? ` · ${origemLabel}` : ""} ·{" "}
-          <span className={saida.status === "Pago" ? "text-pos" : "text-warn"}>{saida.status}</span>
+          {origemLabel ? ` · ${origemLabel}` : ""}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={alternarPago}
+          disabled={isPending}
+          aria-label={saida.status === "Pago" ? "Marcar como a pagar" : "Marcar como pago"}
+          className={`type-caption rounded-xs px-2 py-1 font-medium transition-colors hover:brightness-95 disabled:opacity-40 ${
+            saida.status === "Pago" ? "bg-brand-tint text-on-brand-tint" : "bg-warn-tint text-warn"
+          }`}
+        >
+          {saida.status}
+        </button>
         <Amount cents={saida.total_cents} semantic="none" className="type-body text-ink" />
         <button
           type="button"
