@@ -235,24 +235,42 @@ export default async function DashboardPage({
   // com vencimento no mês, vencimento mais próximo primeiro.
   const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
   const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
-  const aPagarTodas = todasSaidas
-    .filter(
-      (s) =>
-        s.pessoa === contaAtiva &&
-        s.status !== "Pago" &&
-        !!s.vencimento &&
-        s.vencimento >= inicioMes &&
-        s.vencimento < fimMes
-    )
+  const pendentesMes = todasSaidas.filter(
+    (s) =>
+      s.pessoa === contaAtiva &&
+      s.status !== "Pago" &&
+      !!s.vencimento &&
+      s.vencimento >= inicioMes &&
+      s.vencimento < fimMes
+  );
+  const aPagarTotal = pendentesMes.reduce((sum, s) => sum + s.total_cents, 0);
+
+  // Débito: listado item a item (vencimento mais próximo primeiro).
+  const debitosAPagar = pendentesMes
+    .filter((s) => s.metodo === "Débito")
     .sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
-  const aPagarTotal = aPagarTodas.reduce((sum, s) => sum + s.total_cents, 0);
-  const aPagarTop = aPagarTodas.slice(0, 12);
-  const aPagarRestante = aPagarTodas.length - aPagarTop.length;
   const destinoAPagar: Record<string, string> = {};
-  for (const s of aPagarTop) {
-    const id = s.metodo === "Débito" ? s.conta_id : s.cartao_id;
-    destinoAPagar[s.id] = (id && (s.metodo === "Débito" ? contaPorId.get(id) : cartaoPorId.get(id))) ?? "—";
+  for (const s of debitosAPagar) {
+    destinoAPagar[s.id] = (s.conta_id && contaPorId.get(s.conta_id)) ?? "—";
   }
+
+  // Crédito: agregado por cartão (a fatura do mês), com os ids pra quitar de
+  // uma vez.
+  const cartaoMap = new Map<string, { nome: string; totalCents: number; ids: string[] }>();
+  for (const s of pendentesMes) {
+    if (s.metodo !== "Crédito" || !s.cartao_id) continue;
+    const atual = cartaoMap.get(s.cartao_id) ?? {
+      nome: cartaoPorId.get(s.cartao_id) ?? "Cartão",
+      totalCents: 0,
+      ids: [],
+    };
+    atual.totalCents += s.total_cents;
+    atual.ids.push(s.id);
+    cartaoMap.set(s.cartao_id, atual);
+  }
+  const cartoesAPagar = [...cartaoMap.entries()]
+    .map(([cartaoId, v]) => ({ cartaoId, ...v }))
+    .sort((a, b) => b.totalCents - a.totalCents);
 
   // Contas do perfil ativo, pro detalhamento do saldo no card principal.
   const contasDaPessoa = todasContas.filter((c) => c.dono === contaAtiva);
@@ -325,10 +343,10 @@ export default async function DashboardPage({
         </Card>
 
         <ContasAPagar
-          saidas={aPagarTop}
+          debitos={debitosAPagar}
           destinoPorId={destinoAPagar}
+          cartoes={cartoesAPagar}
           totalCents={aPagarTotal}
-          restante={aPagarRestante}
         />
       </div>
 
