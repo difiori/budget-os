@@ -7,7 +7,6 @@ import { PersonTag } from "@/components/ui/person-tag";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
-import { SaldoPorConta } from "@/components/dashboard/saldo-por-conta";
 import { ContasAPagar } from "@/components/dashboard/contas-a-pagar";
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
@@ -58,6 +57,14 @@ function pessoaResumo(
 
 function painelHref(mes: CalendarDate) {
   return `/?ano=${mes.year}&mes=${mes.month}`;
+}
+
+/** Cor do saldo com cheque especial: positivo neutro, negativo dentro do
+ * limite em âmbar, abaixo do limite em granada. */
+function corSaldo(saldoCents: number, limiteCents: number): string {
+  if (saldoCents >= 0) return "text-ink";
+  if (saldoCents >= -limiteCents) return "text-warn";
+  return "text-neg";
 }
 
 /** Fração das entradas do mês já comprometida com saídas. null = sem
@@ -224,13 +231,20 @@ export default async function DashboardPage({
     b.created_at.localeCompare(a.created_at)
   );
 
-  // Contas a pagar (do perfil ativo): saídas ainda não pagas, vencimento mais
-  // próximo primeiro. Mostra as 12 primeiras; o total considera todas.
+  // Contas a pagar do MÊS selecionado (perfil ativo): saídas ainda não pagas
+  // com vencimento no mês, vencimento mais próximo primeiro.
+  const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
+  const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
   const aPagarTodas = todasSaidas
-    .filter((s) => s.pessoa === contaAtiva && s.status !== "Pago")
-    .sort((a, b) =>
-      (a.vencimento ?? a.data ?? a.created_at).localeCompare(b.vencimento ?? b.data ?? b.created_at)
-    );
+    .filter(
+      (s) =>
+        s.pessoa === contaAtiva &&
+        s.status !== "Pago" &&
+        !!s.vencimento &&
+        s.vencimento >= inicioMes &&
+        s.vencimento < fimMes
+    )
+    .sort((a, b) => (a.vencimento ?? "").localeCompare(b.vencimento ?? ""));
   const aPagarTotal = aPagarTodas.reduce((sum, s) => sum + s.total_cents, 0);
   const aPagarTop = aPagarTodas.slice(0, 12);
   const aPagarRestante = aPagarTodas.length - aPagarTop.length;
@@ -239,6 +253,9 @@ export default async function DashboardPage({
     const id = s.metodo === "Débito" ? s.conta_id : s.cartao_id;
     destinoAPagar[s.id] = (id && (s.metodo === "Débito" ? contaPorId.get(id) : cartaoPorId.get(id))) ?? "—";
   }
+
+  // Contas do perfil ativo, pro detalhamento do saldo no card principal.
+  const contasDaPessoa = todasContas.filter((c) => c.dono === contaAtiva);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
@@ -284,6 +301,27 @@ export default async function DashboardPage({
               </dd>
             </div>
           </dl>
+
+          {contasDaPessoa.length > 0 && (
+            <div className="border-t border-hairline pt-4">
+              <p className="type-eyebrow mb-2.5 text-ink-3">Saldo por conta</p>
+              <ul className="flex flex-col gap-2">
+                {contasDaPessoa.map((c) => (
+                  <li key={c.id} className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[0.875rem] text-ink-2">{c.nome}</span>
+                    <Amount
+                      cents={c.saldo_atual_cents}
+                      semantic="none"
+                      className={`text-[0.875rem] font-medium ${corSaldo(
+                        c.saldo_atual_cents,
+                        c.limite_cheque_especial_cents ?? 0
+                      )}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
 
         <Card className="flex flex-col justify-center gap-4 p-6">
@@ -301,15 +339,14 @@ export default async function DashboardPage({
         </Card>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <SaldoPorConta contas={todasContas} />
+      <section className="mt-8">
         <ContasAPagar
           saidas={aPagarTop}
           destinoPorId={destinoAPagar}
           totalCents={aPagarTotal}
           restante={aPagarRestante}
         />
-      </div>
+      </section>
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
