@@ -30,11 +30,13 @@ export const metadata: Metadata = {
     apple: "/app-icon4.png",
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
-  // tela de início, com título e barra de status próprios.
+  // tela de início. `black-translucent`: o app é imersivo e o fundo (charcoal
+  // + aurora) vai até o topo, atrás da status bar; o conteúdo é afastado da
+  // status bar via env(safe-area-inset-top) no layout.
   appleWebApp: {
     capable: true,
     title: "Budget OS",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
 };
 

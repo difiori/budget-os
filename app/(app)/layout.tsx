@@ -4,6 +4,7 @@ import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { Sidebar } from "@/components/ui/sidebar";
 import { NavigationBar } from "@/components/ui/navigation-bar";
 import { Calculator } from "@/components/ui/calculator";
+import { PullToRefresh } from "@/components/ui/pull-to-refresh";
 import { LancarProvider } from "@/components/lancar/lancar-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
@@ -39,13 +40,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex min-h-full flex-1">
             <Sidebar contaAtiva={contaAtiva} />
             {/* pb-20 compensa a barra de navegação fixa do mobile; min-w-0 impede
-                que textos com truncate alarguem a página além do viewport */}
-            <div className="flex min-h-full min-w-0 flex-1 flex-col pb-20 md:pb-0">
+                que textos com truncate alarguem a página além do viewport;
+                pt safe-area afasta o conteúdo da status bar do iPhone (PWA
+                imersivo). No desktop o inset é 0. */}
+            <div className="flex min-h-full min-w-0 flex-1 flex-col pb-20 pt-[env(safe-area-inset-top)] md:pb-0 md:pt-0">
               {children}
               <NavigationBar contaAtiva={contaAtiva} />
             </div>
           </div>
           <Calculator />
+          <PullToRefresh />
         </LancarProvider>
       </ConfirmProvider>
     </ToastProvider>

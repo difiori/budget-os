@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CheckCheck, Pencil, Trash2, X } from "lucide-react";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
@@ -191,6 +191,7 @@ function SaidaRow({
   onRemovido,
   onRestaurado,
   onStatusAlterado,
+  onAtualizado,
 }: {
   saida: Saida;
   categorias: Categoria[];
@@ -199,6 +200,7 @@ function SaidaRow({
   onRemovido: (id: string) => void;
   onRestaurado: (saida: Saida) => void;
   onStatusAlterado: (id: string, novo: SaidaStatus) => void;
+  onAtualizado: (saida: Saida) => void;
 }) {
   const [editando, setEditando] = useState(false);
   // Pré-preenche com o nome base (sem o sufixo "NN/NN"), que a parcela já
@@ -246,6 +248,17 @@ function SaidaRow({
       }
       setErro(null);
       setEditando(false);
+      // Reflete a edição na hora, sem esperar recarregar.
+      onAtualizado({
+        ...saida,
+        nome,
+        total_cents: totalCents,
+        data,
+        vencimento,
+        parcela: parcela.trim() || null,
+        categoria_id: categoriaId || null,
+        status,
+      });
     });
   }
 
@@ -438,6 +451,7 @@ function EntradaRow({
   onRemovido,
   onRestaurado,
   onStatusAlterado,
+  onAtualizado,
 }: {
   entrada: Entrada;
   destinoNome: string;
@@ -445,6 +459,7 @@ function EntradaRow({
   onRemovido: (id: string) => void;
   onRestaurado: (entrada: Entrada) => void;
   onStatusAlterado: (id: string, novo: EntradaStatus) => void;
+  onAtualizado: (entrada: Entrada) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(entrada.nome);
@@ -482,6 +497,14 @@ function EntradaRow({
       }
       setErro(null);
       setEditando(false);
+      onAtualizado({
+        ...entrada,
+        nome,
+        quantia_cents: quantiaCents,
+        data,
+        status,
+        conta_destino_id: contaDestinoId,
+      });
     });
   }
 
@@ -654,12 +677,14 @@ function TransferenciaRow({
   paraNome,
   onRemovido,
   onRestaurado,
+  onAtualizado,
 }: {
   transferencia: Transferencia;
   deNome: string;
   paraNome: string;
   onRemovido: (id: string) => void;
   onRestaurado: (transferencia: Transferencia) => void;
+  onAtualizado: (transferencia: Transferencia) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nome, setNome] = useState(transferencia.nome);
@@ -693,6 +718,7 @@ function TransferenciaRow({
         setErro(error);
         return;
       }
+      onAtualizado({ ...transferencia, nome, valor_cents: valorCents, data });
       setErro(null);
       setEditando(false);
     });
@@ -832,6 +858,12 @@ export function LancamentosList({
   const [saidas, setSaidas] = useState(saidasIniciais);
   const [entradas, setEntradas] = useState(entradasIniciais);
   const [transferencias, setTransferencias] = useState(transferenciasIniciais);
+  // Ao re-buscar do servidor (pull-to-refresh / navegação), ressincroniza com a
+  // verdade do servidor — as props só mudam de referência quando o RSC
+  // re-renderiza, não durante as interações locais.
+  useEffect(() => setSaidas(saidasIniciais), [saidasIniciais]);
+  useEffect(() => setEntradas(entradasIniciais), [entradasIniciais]);
+  useEffect(() => setTransferencias(transferenciasIniciais), [transferenciasIniciais]);
   const [filtros, setFiltros] = useState<Filtros>(() => filtrosPadrao(pessoaAtiva));
   const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "registro", direcao: "desc" });
   const [modoSelecao, setModoSelecao] = useState(false);
@@ -898,6 +930,9 @@ export function LancamentosList({
           onStatusAlterado={(id, novo) =>
             setSaidas((prev) => prev.map((x) => (x.id === id ? { ...x, status: novo } : x)))
           }
+          onAtualizado={(atualizada) =>
+            setSaidas((prev) => prev.map((x) => (x.id === atualizada.id ? atualizada : x)))
+          }
         />
       ),
     }));
@@ -926,6 +961,9 @@ export function LancamentosList({
           onStatusAlterado={(id, novo) =>
             setEntradas((prev) => prev.map((x) => (x.id === id ? { ...x, status: novo } : x)))
           }
+          onAtualizado={(atualizada) =>
+            setEntradas((prev) => prev.map((x) => (x.id === atualizada.id ? atualizada : x)))
+          }
         />
       ),
     }));
@@ -951,6 +989,9 @@ export function LancamentosList({
           paraNome={contaPorId.get(t.para_conta_id) ?? "—"}
           onRemovido={(id) => setTransferencias((prev) => prev.filter((x) => x.id !== id))}
           onRestaurado={(transferencia) => setTransferencias((prev) => [...prev, transferencia])}
+          onAtualizado={(atualizada) =>
+            setTransferencias((prev) => prev.map((x) => (x.id === atualizada.id ? atualizada : x)))
+          }
         />
       ),
     }));
