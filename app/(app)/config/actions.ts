@@ -32,18 +32,23 @@ export async function criarConta(formData: FormData): Promise<ActionResult> {
   const nome = String(formData.get("nome") ?? "").trim();
   const dono = String(formData.get("dono") ?? "") as Pessoa;
   const saldoInput = String(formData.get("saldo") ?? "0");
+  const limiteInput = String(formData.get("limite") ?? "0");
 
   if (!nome) return { error: "Informe o nome da conta." };
 
   let saldoCents: number;
+  let limiteCents: number;
   try {
     saldoCents = parseCentsFromBRL(saldoInput || "0");
+    limiteCents = parseCentsFromBRL(limiteInput || "0");
   } catch {
-    return { error: "Saldo inválido." };
+    return { error: "Saldo ou limite inválido." };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("conta").insert({ nome, dono, saldo_atual_cents: saldoCents });
+  const { error } = await supabase
+    .from("conta")
+    .insert({ nome, dono, saldo_atual_cents: saldoCents, limite_cheque_especial_cents: limiteCents });
   if (error) return { error: mensagemErro(error) };
 
   revalidatePath("/config");
@@ -57,20 +62,23 @@ export async function atualizarConta(id: string, formData: FormData): Promise<Ac
   const nome = String(formData.get("nome") ?? "").trim();
   const dono = String(formData.get("dono") ?? "") as Pessoa;
   const saldoInput = String(formData.get("saldo") ?? "0");
+  const limiteInput = String(formData.get("limite") ?? "0");
 
   if (!nome) return { error: "Informe o nome da conta." };
 
   let saldoCents: number;
+  let limiteCents: number;
   try {
     saldoCents = parseCentsFromBRL(saldoInput || "0");
+    limiteCents = parseCentsFromBRL(limiteInput || "0");
   } catch {
-    return { error: "Saldo inválido." };
+    return { error: "Saldo ou limite inválido." };
   }
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("conta")
-    .update({ nome, dono, saldo_atual_cents: saldoCents })
+    .update({ nome, dono, saldo_atual_cents: saldoCents, limite_cheque_especial_cents: limiteCents })
     .eq("id", id);
   if (error) return { error: mensagemErro(error) };
 

@@ -7,7 +7,7 @@ export default async function ConfigPage() {
   const supabase = await createClient();
 
   const [{ data: contas }, { data: cartoes }, { data: categorias }] = await Promise.all([
-    supabase.from("conta").select("id, nome, dono, saldo_atual_cents").order("nome"),
+    supabase.from("conta").select("id, nome, dono, saldo_atual_cents, limite_cheque_especial_cents").order("nome"),
     supabase
       .from("cartao")
       .select("id, nome, dono, tipo, limite_cents, dia_fechamento, dia_vencimento, conta_vinculada_id")

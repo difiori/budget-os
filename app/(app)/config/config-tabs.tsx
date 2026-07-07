@@ -52,6 +52,7 @@ function ContaRow({ conta }: { conta: Conta }) {
   const [nome, setNome] = useState(conta.nome);
   const [dono, setDono] = useState<Pessoa>(conta.dono);
   const [saldo, setSaldo] = useState(centsToInputValue(conta.saldo_atual_cents));
+  const [limite, setLimite] = useState(centsToInputValue(conta.limite_cheque_especial_cents ?? 0));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const confirmar = useConfirm();
@@ -62,6 +63,7 @@ function ContaRow({ conta }: { conta: Conta }) {
     formData.set("nome", nome);
     formData.set("dono", dono);
     formData.set("saldo", saldo);
+    formData.set("limite", limite);
     startTransition(async () => {
       const { error } = await atualizarConta(conta.id, formData);
       setError(error);
@@ -102,14 +104,27 @@ function ContaRow({ conta }: { conta: Conta }) {
         ))}
       </div>
 
-      <div>
-        <label className="type-caption mb-1 block text-ink-2">Saldo atual</label>
-        <input
-          value={saldo}
-          onChange={(e) => setSaldo(e.target.value)}
-          inputMode="decimal"
-          className="figures w-40 rounded-sm border border-hairline-strong bg-raised px-3 py-2 text-ink outline-none focus:border-ink-2"
-        />
+      <div className="flex flex-wrap gap-4">
+        <div>
+          <label className="type-caption mb-1 block text-ink-2">Saldo atual</label>
+          <input
+            value={saldo}
+            onChange={(e) => setSaldo(e.target.value)}
+            inputMode="decimal"
+            className="figures w-40 rounded-sm border border-hairline-strong bg-raised px-3 py-2 text-ink outline-none focus:border-ink-2"
+          />
+        </div>
+        <div>
+          <label className="type-caption mb-1 block text-ink-2">Cheque especial</label>
+          <input
+            value={limite}
+            onChange={(e) => setLimite(e.target.value)}
+            inputMode="decimal"
+            placeholder="0,00"
+            className="figures w-40 rounded-sm border border-hairline-strong bg-raised px-3 py-2 text-ink outline-none focus:border-ink-2"
+          />
+          <p className="type-caption mt-1 text-ink-3">Limite de saldo negativo (0 = sem)</p>
+        </div>
       </div>
 
       <ErrorLine error={error} />

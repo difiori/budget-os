@@ -29,6 +29,9 @@ export interface Conta {
   nome: string;
   dono: Pessoa;
   saldo_atual_cents: number;
+  /** Limite de cheque especial (overdraft). 0 = sem cheque especial. O saldo
+   * pode ir até `-limite_cheque_especial_cents` antes de estourar. */
+  limite_cheque_especial_cents: number;
 }
 
 export interface Cartao {
