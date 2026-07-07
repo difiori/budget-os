@@ -324,29 +324,28 @@ export default async function DashboardPage({
           )}
         </Card>
 
-        <Card className="flex flex-col justify-center gap-4 p-6">
-          <p className="type-eyebrow text-ink-3">Casal · {labelMes(mesReferencia)}</p>
-          <div className="flex flex-col divide-y divide-hairline">
-            <div className="flex items-baseline justify-between py-2.5">
-              <p className="type-label text-ink-2">Saldo atual</p>
-              <Amount cents={saldoAtualCasal} className="type-title" />
-            </div>
-            <div className="flex items-baseline justify-between py-2.5">
-              <p className="type-label text-ink-2">Saldo previsto</p>
-              <Amount cents={saldoPrevistoCasal} className="type-title" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <section className="mt-8">
         <ContasAPagar
           saidas={aPagarTop}
           destinoPorId={destinoAPagar}
           totalCents={aPagarTotal}
           restante={aPagarRestante}
         />
-      </section>
+      </div>
+
+      {/* Casal em faixa horizontal, abaixo do saldo previsto. */}
+      <Card className="mt-5 flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <p className="type-eyebrow text-ink-3">Casal · {labelMes(mesReferencia)}</p>
+        <div className="flex gap-10">
+          <div>
+            <p className="type-caption text-ink-3">Saldo atual</p>
+            <Amount cents={saldoAtualCasal} className="type-title" />
+          </div>
+          <div>
+            <p className="type-caption text-ink-3">Saldo previsto</p>
+            <Amount cents={saldoPrevistoCasal} className="type-title" />
+          </div>
+        </div>
+      </Card>
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
