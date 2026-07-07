@@ -340,6 +340,19 @@ export default async function DashboardPage({
               </ul>
             </div>
           )}
+
+          {/* Casal: fecho curto do card (atual + previsto do casal). */}
+          <div className="border-t border-hairline pt-4">
+            <p className="type-eyebrow mb-2.5 text-ink-3">Casal</p>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="type-caption text-ink-3">Saldo atual</span>
+              <Amount cents={saldoAtualCasal} className="text-[0.875rem] font-medium" />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <span className="type-caption text-ink-3">Saldo previsto</span>
+              <Amount cents={saldoPrevistoCasal} className="text-[0.875rem] font-medium" />
+            </div>
+          </div>
         </Card>
 
         <ContasAPagar
@@ -349,21 +362,6 @@ export default async function DashboardPage({
           totalCents={aPagarTotal}
         />
       </div>
-
-      {/* Casal em faixa horizontal, abaixo do saldo previsto. */}
-      <Card className="mt-5 flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-        <p className="type-eyebrow text-ink-3">Casal · {labelMes(mesReferencia)}</p>
-        <div className="flex gap-10">
-          <div>
-            <p className="type-caption text-ink-3">Saldo atual</p>
-            <Amount cents={saldoAtualCasal} className="type-title" />
-          </div>
-          <div>
-            <p className="type-caption text-ink-3">Saldo previsto</p>
-            <Amount cents={saldoPrevistoCasal} className="type-title" />
-          </div>
-        </div>
-      </Card>
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
