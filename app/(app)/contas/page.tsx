@@ -11,6 +11,7 @@ import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/ca
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { formatCentsToBRL } from "@/lib/domain/money";
 import { labelMes } from "@/lib/format/meses";
+import { AjustarSaldo } from "@/components/conta/ajustar-saldo";
 import { MetasPoupanca, type MetaView } from "./metas-poupanca";
 import type { Cartao, CategoriaDono, Conta, Entrada, MetaPoupanca, Pessoa, Saida } from "@/lib/domain/types";
 
@@ -227,6 +228,10 @@ export default async function ContasPage({
                   )}
                 </div>
               )}
+
+              <div className="border-t border-hairline pt-3">
+                <AjustarSaldo contaId={view.conta.id} saldoAtualCents={view.conta.saldo_atual_cents} />
+              </div>
             </Card>
           ))}
         </div>

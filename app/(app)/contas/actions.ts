@@ -99,3 +99,25 @@ export async function excluirMeta(id: string): Promise<ActionResult> {
   revalidarContas();
   return { error: null };
 }
+
+/** Reancora o saldo de uma conta para o valor real informado (o "saldo do
+ * banco"). O saldo é mantido incrementalmente pelos RPCs e pode derivar; isto
+ * fixa a âncora. Aceita valor negativo (cheque especial). */
+export async function reconciliarSaldo(contaId: string, saldoInput: string): Promise<ActionResult> {
+  let saldoCents: number;
+  try {
+    saldoCents = parseCentsFromBRL(saldoInput);
+  } catch {
+    return { error: "Saldo inválido." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("conta").update({ saldo_atual_cents: saldoCents }).eq("id", contaId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/contas");
+  revalidatePath("/");
+  revalidatePath("/mes");
+  revalidatePath("/config");
+  return { error: null };
+}
