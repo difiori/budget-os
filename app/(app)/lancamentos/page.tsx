@@ -12,6 +12,15 @@ function monthHref(mes: CalendarDate) {
   return `/lancamentos?ano=${mes.year}&mes=${mes.month}`;
 }
 
+function revisaoDosLancamentos(valores: unknown[]): string {
+  const serializado = JSON.stringify(valores);
+  let hash = 2166136261;
+  for (let i = 0; i < serializado.length; i += 1) {
+    hash = Math.imul(hash ^ serializado.charCodeAt(i), 16777619);
+  }
+  return `${serializado.length}-${hash >>> 0}`;
+}
+
 export default async function LancamentosPage({
   searchParams,
 }: {
@@ -89,10 +98,9 @@ export default async function LancamentosPage({
       </PageHeader>
 
       <LancamentosList
-        // Só o mês vira `key`: trocar de mês traz dados novos e reinicia o
-        // estado local (edição/remoção otimista). Os filtros são client-side e
-        // não precisam de remonte.
-        key={`${mesReferencia.year}-${mesReferencia.month}`}
+        // Reinicia o estado otimista quando um refresh traz uma nova verdade
+        // do servidor. Assim não precisamos espelhar props em state via effect.
+        key={revisaoDosLancamentos([saidas, entradas, transferencias])}
         saidasIniciais={saidas}
         entradasIniciais={entradas}
         transferenciasIniciais={transferencias}

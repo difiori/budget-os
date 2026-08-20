@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -65,8 +65,8 @@ function brl(cents: number): string {
 }
 
 export function TrendChart({ labels, gastos, entradas }: TrendChartProps) {
-  const theme = useTheme();
-  const cores = useMemo(() => lerTokens(), [theme]);
+  useTheme();
+  const cores = lerTokens();
 
   const options: ChartOptions<"line"> = {
     responsive: true,
