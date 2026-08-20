@@ -54,7 +54,6 @@ export function Combobox({
   useEffect(() => {
     if (!aberto) return;
     buscaRef.current?.focus();
-    setAtivo(0);
     function onDocClick(e: MouseEvent) {
       if (raizRef.current && !raizRef.current.contains(e.target as Node)) setAberto(false);
     }
@@ -90,7 +89,10 @@ export function Combobox({
       <button
         type="button"
         id={id}
-        onClick={() => setAberto((v) => !v)}
+        onClick={() => {
+          setAberto((v) => !v);
+          setAtivo(0);
+        }}
         aria-haspopup="listbox"
         aria-expanded={aberto}
         className="flex w-full items-center justify-between gap-2 rounded-sm border border-hairline-strong bg-raised px-3.5 py-2.5 text-left text-ink outline-none transition-colors hover:border-ink-3 focus:border-ink-2"

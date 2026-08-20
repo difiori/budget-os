@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CheckCheck, Pencil, Trash2, X } from "lucide-react";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
@@ -858,12 +858,6 @@ export function LancamentosList({
   const [saidas, setSaidas] = useState(saidasIniciais);
   const [entradas, setEntradas] = useState(entradasIniciais);
   const [transferencias, setTransferencias] = useState(transferenciasIniciais);
-  // Ao re-buscar do servidor (pull-to-refresh / navegação), ressincroniza com a
-  // verdade do servidor — as props só mudam de referência quando o RSC
-  // re-renderiza, não durante as interações locais.
-  useEffect(() => setSaidas(saidasIniciais), [saidasIniciais]);
-  useEffect(() => setEntradas(entradasIniciais), [entradasIniciais]);
-  useEffect(() => setTransferencias(transferenciasIniciais), [transferenciasIniciais]);
   const [filtros, setFiltros] = useState<Filtros>(() => filtrosPadrao(pessoaAtiva));
   const [ordenacao, setOrdenacao] = useState<Ordenacao>({ campo: "registro", direcao: "desc" });
   const [modoSelecao, setModoSelecao] = useState(false);

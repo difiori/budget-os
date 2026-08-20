@@ -45,7 +45,7 @@ export function EditarSaidaForm({
   const [valor, setValor] = useState(centsToInputValue(saida.total_cents));
   const [data, setData] = useState(isoParaInput(saida.data));
   const [vencimento, setVencimento] = useState(isoParaInput(saida.vencimento));
-  const [parcela, setParcela] = useState(saida.parcela ?? "");
+  const parcela = saida.parcela ?? "";
   const [categoriaId, setCategoriaId] = useState(saida.categoria_id ?? "");
   const [status, setStatus] = useState<SaidaStatus>(saida.status);
   const [erro, setErro] = useState<string | null>(null);

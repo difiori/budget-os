@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isBudgetUserId } from "@/lib/auth/allowed-users";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 
@@ -19,9 +20,10 @@ export default function LoginPage() {
     setStatus("sending");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
+    if (error || !data.user || !isBudgetUserId(data.user.id)) {
+      if (data.user) await supabase.auth.signOut();
       setStatus("error");
       return;
     }
