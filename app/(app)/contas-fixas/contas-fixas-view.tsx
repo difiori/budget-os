@@ -17,6 +17,7 @@ import { alternarStatusSaida, atualizarSaida } from "@/app/(app)/lancamentos/act
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { addMonths, parseCalendarDate, type CalendarDate } from "@/lib/domain/calendar-date";
 import { diasAte, ocorrenciaDoMes, ocorrenciaPrevista, vigenteNoMes } from "@/lib/domain/conta-fixa";
+import { cicloDoCartao, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { labelMes, MESES, MESES_ABREV } from "@/lib/format/meses";
 import type { Cartao, Categoria, Conta, ContaFixa, MetodoPagamento, Pessoa, Saida } from "@/lib/domain/types";
@@ -31,7 +32,7 @@ import {
 
 type Filtro = Pessoa | "Casal";
 type ContaRef = Pick<Conta, "id" | "nome" | "dono">;
-type CartaoRef = Pick<Cartao, "id" | "nome" | "dono" | "dia_vencimento">;
+type CartaoRef = Pick<Cartao, "id" | "nome" | "dono" | "dia_fechamento" | "dia_vencimento">;
 
 function mesAbrev(iso: string): string {
   const d = parseCalendarDate(iso);
@@ -285,12 +286,11 @@ export function ContasFixasView({
   const gruposDebito = agrupar(debito, (cf) => categoriaNome.get(cf.categoria_id ?? "") ?? "Sem categoria");
   const gruposCredito = agrupar(credito, (cf) => cartaoNome.get(cf.cartao_id ?? "") ?? "Cartão");
 
-  const mesSeguinte = addMonths(mesReferencia, 1);
   const dd = (n: number) => String(n).padStart(2, "0");
   function rotuloFatura(nomeCartao: string): string {
     const cartao = cartoes.find((c) => c.nome === nomeCartao);
-    const dia = cartao?.dia_vencimento ?? 10;
-    return `Fatura de ${MESES[mesReferencia.month - 1].toLowerCase()} · vence ${dd(dia)}/${dd(mesSeguinte.month)}`;
+    const venc = vencimentoDaFatura(mesReferencia, cicloDoCartao(cartao));
+    return `Fatura de ${MESES[mesReferencia.month - 1].toLowerCase()} · vence ${dd(venc.day)}/${dd(venc.month)}`;
   }
 
   // Resumo do mês: pagamento e urgência só fazem sentido no débito.

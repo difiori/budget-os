@@ -8,6 +8,7 @@ import { gerarParcelas } from "@/lib/domain/parcelamento";
 import { gerarEntradasRecorrentes } from "@/lib/domain/recorrencia";
 import { nomeSemParcela } from "@/lib/domain/parcelamento";
 import { mesISO } from "@/lib/domain/conta-fixa";
+import { cicloDoCartao, type CicloCartao } from "@/lib/domain/ciclo-cartao";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import type { EntradaStatus, FormatoCompra, MetodoPagamento, Pessoa, SaidaStatus } from "@/lib/domain/types";
 
@@ -170,6 +171,14 @@ export async function criarLancamento(
   const numeroParcelas = formato === "Parcelado" ? Number(formData.get("numeroParcelas") ?? "2") || 2 : 1;
   const contaVinculadaId = String(formData.get("contaVinculadaId") ?? "") || null;
 
+  // Ciclo real do cartão (fechamento/vencimento) decide a fatura e o vencimento.
+  const { data: cartaoSel } = await supabase
+    .from("cartao")
+    .select("dia_fechamento, dia_vencimento")
+    .eq("id", destinoId)
+    .single();
+  const ciclo = cicloDoCartao(cartaoSel as { dia_fechamento: number; dia_vencimento: number } | null);
+
   if (numeroParcelas > 1) {
     const parcelas = gerarParcelas({
       nome,
@@ -181,6 +190,7 @@ export async function criarLancamento(
       status: saidaStatus,
       cartaoId: destinoId,
       categoriaId,
+      ciclo,
     }).map((parcela) => ({ ...parcela, editado_por: editadoPor }));
     const { error } = await supabase.from("saida").insert(parcelas);
     if (error) return { status: "error", message: error.message };
@@ -196,10 +206,11 @@ export async function criarLancamento(
       contaId: null,
       cartaoId: destinoId,
       editadoPor,
+      ciclo,
     });
     if (erro) return { status: "error", message: erro };
   } else {
-    const vencimento = calcularVencimento(dataCompra, "Crédito");
+    const vencimento = calcularVencimento(dataCompra, "Crédito", ciclo);
     const { error } = await supabase.from("saida").insert({
       nome,
       total_cents: totalCents,
@@ -252,6 +263,7 @@ async function criarContaFixaComPrimeiraOcorrencia(
     contaId: string | null;
     cartaoId: string | null;
     editadoPor: Pessoa;
+    ciclo?: CicloCartao;
   }
 ): Promise<string | null> {
   const { data: contrato, error } = await supabase
@@ -274,7 +286,7 @@ async function criarContaFixaComPrimeiraOcorrencia(
     .single();
   if (error || !contrato) return error?.message ?? "Não foi possível criar a conta fixa.";
 
-  const vencimento = calcularVencimento(p.data, p.metodo);
+  const vencimento = calcularVencimento(p.data, p.metodo, p.ciclo);
   const { error: ocErr } = await supabase.from("saida").insert({
     nome: p.nome,
     total_cents: p.totalCents,

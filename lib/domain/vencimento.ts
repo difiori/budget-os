@@ -1,19 +1,20 @@
-import { type CalendarDate, addMonths } from "./calendar-date";
+import type { CalendarDate } from "./calendar-date";
+import { CICLO_PADRAO, mesDaFatura, vencimentoDaFatura, type CicloCartao } from "./ciclo-cartao";
 import type { MetodoPagamento } from "./types";
 
 /**
- * Regra 7 (regra alvo, diferente do legado onde vencimento = data):
- * Crédito -> dia 10 do mês seguinte à `data` (entra em fatura de cartão,
- * já que o fechamento de todos os cartões é sempre no último dia do mês).
- * Débito -> vencimento = data (liquidação imediata).
+ * Regra 7: Débito vence na própria data (liquidação imediata). Crédito vence
+ * com a fatura em que a compra cai, conforme o ciclo do cartão (fechamento e
+ * vencimento reais). Sem ciclo informado, vale o padrão histórico: fecha no
+ * último dia do mês e vence dia 10 do seguinte.
  */
 export function calcularVencimento(
   data: CalendarDate,
-  metodo: MetodoPagamento
+  metodo: MetodoPagamento,
+  ciclo: CicloCartao = CICLO_PADRAO
 ): CalendarDate {
   if (metodo === "Crédito") {
-    const mesSeguinte = addMonths(data, 1);
-    return { ...mesSeguinte, day: 10 };
+    return vencimentoDaFatura(mesDaFatura(data, ciclo), ciclo);
   }
   return data;
 }

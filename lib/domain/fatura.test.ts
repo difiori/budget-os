@@ -53,6 +53,15 @@ describe("faturaAtualCents (regras 1-2)", () => {
     const saidas = [saida({ total_cents: 10000, data: null, created_at: "2026-07-05T12:00:00.000Z" })];
     expect(faturaAtualCents(CARBON_BLACK, saidas, mesReferencia)).toBe(10000);
   });
+
+  it("respeita o fechamento real do cartão: compra depois do fechamento cai na fatura seguinte", () => {
+    const fecha25 = { dia_fechamento: 25, dia_vencimento: 10 };
+    const saidas = [saida({ total_cents: 10000, data: "2026-07-20" }), saida({ total_cents: 5000, data: "2026-07-28" })];
+    expect(faturaAtualCents(CARBON_BLACK, saidas, mesReferencia, fecha25)).toBe(10000);
+    expect(faturaAtualCents(CARBON_BLACK, saidas, { year: 2026, month: 8, day: 1 }, fecha25)).toBe(5000);
+    // Compra de 26/06 também pertence à fatura de julho nesse ciclo.
+    expect(faturaAtualCents(CARBON_BLACK, [saida({ total_cents: 700, data: "2026-06-26" })], mesReferencia, fecha25)).toBe(700);
+  });
 });
 
 describe("limiteComprometidoCents", () => {

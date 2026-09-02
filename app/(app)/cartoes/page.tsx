@@ -8,6 +8,7 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
+import { cicloDoCartao, fechamentoDaFatura, mesDaFatura, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
 import { labelMes, MESES } from "@/lib/format/meses";
 import { CartoesList, type CartaoView } from "./cartoes-list";
@@ -75,16 +76,22 @@ export default async function CartoesPage({
 
   const views: CartaoView[] = todosCartoes.map((cartao) => {
     const saidasCartao = todasSaidas.filter((s) => s.cartao_id === cartao.id);
-    const comprometido = limiteComprometidoCents(cartao.id, saidasCartao, mesReferencia);
+    // Ciclo real do cartão: fechamento e vencimento cadastrados decidem em
+    // que fatura cada compra cai e quando ela vence.
+    const ciclo = cicloDoCartao(cartao);
+    const comprometido = limiteComprometidoCents(cartao.id, saidasCartao, mesReferencia, ciclo);
 
-    // Fatura "a vencer": compras do mês anterior — fecharam e vencem agora.
+    // Fatura "a vencer": a do mês anterior — já fechou, vence agora.
     const comprasAVencer = saidasCartao
-      .filter((s) => isSameMonth(dataParaCalculo(s), mesAnterior))
+      .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), ciclo), mesAnterior))
       .sort(ordenarPorData);
-    // Fatura "do mês": compras do mês em foco — vencem no mês seguinte.
+    // Fatura "do mês": a do mês em foco — ainda acumulando.
     const comprasDoMes = saidasCartao
-      .filter((s) => isSameMonth(dataParaCalculo(s), mesReferencia))
+      .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), ciclo), mesReferencia))
       .sort(ordenarPorData);
+    const vencAVencer = vencimentoDaFatura(mesAnterior, ciclo);
+    const vencDoMes = vencimentoDaFatura(mesReferencia, ciclo);
+    const fechaDoMes = fechamentoDaFatura(mesReferencia, ciclo);
 
     const pendentesAVencer = comprasAVencer.filter((s) => s.status !== "Pago");
     const fixas = (lista: Saida[]) => {
@@ -99,8 +106,8 @@ export default async function CartoesPage({
       contaVinculadaNome: cartao.conta_vinculada_id ? contaPorId.get(cartao.conta_vinculada_id) ?? null : null,
       aVencer: {
         titulo: `Fatura de ${MESES[mesAnterior.month - 1]}`,
-        vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesReferencia.month)}`,
-        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesAnterior),
+        vencimentoLabel: `vence ${dd(vencAVencer.day)}/${dd(vencAVencer.month)}`,
+        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesAnterior, ciclo),
         compras: comprasAVencer,
         ...fixas(comprasAVencer),
         temPendente: pendentesAVencer.length > 0,
@@ -110,8 +117,8 @@ export default async function CartoesPage({
       },
       doMes: {
         titulo: `Fatura de ${MESES[mesReferencia.month - 1]}`,
-        vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesSeguinte.month)}`,
-        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia),
+        vencimentoLabel: `fecha ${dd(fechaDoMes.day)}/${dd(fechaDoMes.month)} · vence ${dd(vencDoMes.day)}/${dd(vencDoMes.month)}`,
+        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia, ciclo),
         compras: comprasDoMes,
         ...fixas(comprasDoMes),
       },

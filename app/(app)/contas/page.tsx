@@ -10,6 +10,7 @@ import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
+import { cicloDoCartao, mesDaFatura } from "@/lib/domain/ciclo-cartao";
 import { formatCentsToBRL } from "@/lib/domain/money";
 import { labelMes } from "@/lib/format/meses";
 import { AjustarSaldo } from "@/components/conta/ajustar-saldo";
@@ -93,7 +94,7 @@ export default async function ContasPage({
         .order("id")
         .range(from, to)
     ),
-    supabase.from("cartao").select("id, nome, conta_vinculada_id"),
+    supabase.from("cartao").select("id, nome, conta_vinculada_id, dia_fechamento, dia_vencimento"),
     metasQuery,
   ]);
 
@@ -104,7 +105,7 @@ export default async function ContasPage({
   >[];
   const todasSaidasDebito = (saidasDebito ?? []) as Pick<Saida, "id" | "total_cents" | "conta_id" | "vencimento">[];
   const todasSaidasCartao = saidasCartao;
-  const todosCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "conta_vinculada_id">[];
+  const todosCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "conta_vinculada_id" | "dia_fechamento" | "dia_vencimento">[];
   const todasMetas = (metas ?? []) as MetaPoupanca[];
   const contaPorId = new Map(todasContas.map((c) => [c.id, c]));
 
@@ -136,7 +137,7 @@ export default async function ContasPage({
       const pendente = todasSaidasCartao
         .filter((s) => s.cartao_id === cartao.id)
         .filter((s) => s.status !== "Pago")
-        .filter((s) => isSameMonth(dataParaCalculo(s), mesAnterior))
+        .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), cicloDoCartao(cartao)), mesAnterior))
         .reduce((sum, s) => sum + s.total_cents, 0);
       return total + pendente;
     }, 0);

@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { isSameMonth } from "@/lib/domain/calendar-date";
+import { cicloDoCartao, mesDaFatura } from "@/lib/domain/ciclo-cartao";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 
 type ActionResult = { error: string | null };
 
 /**
  * Quita de uma vez todas as compras de uma fatura fechada (compras do cartão
- * feitas no mês-ciclo informado que ainda não estão pagas): marca cada uma como
+ * que caem na fatura do mês informado, pelo ciclo real do cartão, e ainda não
+ * estão pagas): marca cada uma como
  * "Pago" e debita o total da conta vinculada ao cartão.
  */
 export async function marcarFaturaComoPaga(input: {
@@ -27,13 +29,14 @@ export async function marcarFaturaComoPaga(input: {
 
   const { data: cartao } = await supabase
     .from("cartao")
-    .select("conta_vinculada_id")
+    .select("conta_vinculada_id, dia_fechamento, dia_vencimento")
     .eq("id", input.cartaoId)
     .single();
   const contaVinculadaId = (cartao?.conta_vinculada_id as string | null) ?? null;
   if (!contaVinculadaId) {
     return { error: "Vincule uma conta a este cartão em Configurações para pagar a fatura." };
   }
+  const ciclo = cicloDoCartao(cartao as { dia_fechamento: number; dia_vencimento: number });
 
   const { data: saidas, error: fetchError } = await supabase
     .from("saida")
@@ -44,7 +47,7 @@ export async function marcarFaturaComoPaga(input: {
   const cicloRef = { year: input.ano, month: input.mes, day: 1 };
   const aPagar = ((saidas ?? []) as { id: string; total_cents: number; data: string | null; created_at: string; status: string }[])
     .filter((s) => s.status !== "Pago")
-    .filter((s) => isSameMonth(dataParaCalculo(s), cicloRef));
+    .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), ciclo), cicloRef));
 
   if (aPagar.length === 0) return { error: "Nenhuma conta pendente nesta fatura." };
 
@@ -94,13 +97,14 @@ export async function desfazerFaturaPaga(input: {
 
   const { data: cartao } = await supabase
     .from("cartao")
-    .select("conta_vinculada_id")
+    .select("conta_vinculada_id, dia_fechamento, dia_vencimento")
     .eq("id", input.cartaoId)
     .single();
   const contaVinculadaId = (cartao?.conta_vinculada_id as string | null) ?? null;
   if (!contaVinculadaId) {
     return { error: "Este cartão não tem conta vinculada." };
   }
+  const ciclo = cicloDoCartao(cartao as { dia_fechamento: number; dia_vencimento: number });
 
   const { data: saidas, error: fetchError } = await supabase
     .from("saida")
@@ -111,7 +115,7 @@ export async function desfazerFaturaPaga(input: {
   const cicloRef = { year: input.ano, month: input.mes, day: 1 };
   const pagas = ((saidas ?? []) as { id: string; total_cents: number; data: string | null; created_at: string; status: string }[])
     .filter((s) => s.status === "Pago")
-    .filter((s) => isSameMonth(dataParaCalculo(s), cicloRef));
+    .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), ciclo), cicloRef));
 
   if (pagas.length === 0) return { error: "Nenhuma conta paga nesta fatura pra desfazer." };
 

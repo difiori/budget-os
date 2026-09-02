@@ -1,4 +1,5 @@
 import { type CalendarDate, addMonths, formatCalendarDateISO } from "./calendar-date";
+import type { CicloCartao } from "./ciclo-cartao";
 import { calcularVencimento } from "./vencimento";
 import type { MetodoPagamento, Pessoa, SaidaStatus } from "./types";
 
@@ -32,6 +33,8 @@ export interface CompraParcelada {
   status: SaidaStatus;
   cartaoId: string;
   categoriaId: string | null;
+  /** Ciclo do cartão (fechamento/vencimento). Sem ele, vale o padrão histórico. */
+  ciclo?: CicloCartao;
 }
 
 export interface ParcelaGerada {
@@ -54,7 +57,7 @@ export interface ParcelaGerada {
  * - valor = total/N com ajuste de centavos na última parcela
  * - nome "X 01/N"…"X NN/N" com zero à esquerda
  * - data da parcela i = data da compra + (i-1) meses
- * - vencimento = dia 10 do mês seguinte à data da própria parcela
+ * - vencimento = o da fatura em que a parcela cai (ciclo do cartão)
  */
 export function gerarParcelas(compra: CompraParcelada): ParcelaGerada[] {
   const { numeroParcelas, totalCents } = compra;
@@ -71,7 +74,7 @@ export function gerarParcelas(compra: CompraParcelada): ParcelaGerada[] {
     const isUltima = numero === numeroParcelas;
     const valorCents = isUltima ? ajusteUltima : valorBase;
     const dataParcela = addMonths(compra.data, index);
-    const vencimento = calcularVencimento(dataParcela, compra.metodo);
+    const vencimento = calcularVencimento(dataParcela, compra.metodo, compra.ciclo);
     const numeroFormatado = String(numero).padStart(largura, "0");
     const totalFormatado = String(numeroParcelas).padStart(largura, "0");
 

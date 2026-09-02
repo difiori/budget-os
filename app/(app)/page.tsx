@@ -18,6 +18,7 @@ import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
 import { faturaAtualCents } from "@/lib/domain/fatura";
+import { cicloDoCartao, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { resumirLancamentos, saidasDoMesPorData } from "@/lib/domain/feed-saidas";
 import { ocorrenciasVirtuais } from "@/lib/domain/conta-fixa";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
@@ -127,7 +128,7 @@ export default async function DashboardPage({
         .range(from, to)
     ),
     supabase.from("categoria").select("id, nome, dono"),
-    supabase.from("cartao").select("id, nome, dono, dia_vencimento, conta_vinculada_id"),
+    supabase.from("cartao").select("id, nome, dono, dia_fechamento, dia_vencimento, conta_vinculada_id"),
     supabase
       .from("recorrente")
       .select("id, nome, total_cents, pessoa, metodo, categoria_id, conta_id, cartao_id, dia_vencimento, ativo, inicio, fim, created_at"),
@@ -137,7 +138,7 @@ export default async function DashboardPage({
   const todasSaidas = saidasTodas;
   const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
-  const listaCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_vencimento" | "conta_vinculada_id">[];
+  const listaCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_fechamento" | "dia_vencimento" | "conta_vinculada_id">[];
   const contaVinculadaPorCartaoId = new Map(listaCartoes.map((c) => [c.id, c.conta_vinculada_id]));
   const contaPorId = new Map(todasContas.map((c) => [c.id, c.nome]));
   const cartaoPorId = new Map(listaCartoes.map((c) => [c.id, c.nome]));
@@ -155,7 +156,8 @@ export default async function DashboardPage({
   // Contas fixas de meses ainda não abertos não existem no banco; entram na
   // projeção como ocorrências virtuais (mesmo valor, "A pagar"), sem gravar.
   const listaContratos = (contratos ?? []) as ContaFixa[];
-  const saidasProjecao = [...todasSaidas, ...ocorrenciasVirtuais(listaContratos, todasSaidas, mesesProjecao)];
+  const cicloPorCartaoId = new Map(listaCartoes.map((c) => [c.id, cicloDoCartao(c)]));
+  const saidasProjecao = [...todasSaidas, ...ocorrenciasVirtuais(listaContratos, todasSaidas, mesesProjecao, cicloPorCartaoId)];
   const projetar = (contas: Conta[]) =>
     projecaoSaldoMeses(contas, saidasProjecao, todasEntradas, mesesProjecao, contaVinculadaPorCartaoId).map(
       (p) => p.saldoTotal
@@ -248,12 +250,16 @@ export default async function DashboardPage({
   const dd = (n: number) => String(n).padStart(2, "0");
   const faturasDoMes = listaCartoes
     .filter((c) => c.dono === contaAtiva)
-    .map((c) => ({
-      id: c.id,
-      nome: c.nome,
-      totalCents: faturaAtualCents(c.id, todasSaidas, mesReferencia),
-      vence: `${dd(c.dia_vencimento)}/${dd(mesSeguinte.month)}`,
-    }))
+    .map((c) => {
+      const ciclo = cicloDoCartao(c);
+      const venc = vencimentoDaFatura(mesReferencia, ciclo);
+      return {
+        id: c.id,
+        nome: c.nome,
+        totalCents: faturaAtualCents(c.id, todasSaidas, mesReferencia, ciclo),
+        vence: `${dd(venc.day)}/${dd(venc.month)}`,
+      };
+    })
     .filter((f) => f.totalCents !== 0)
     .sort((a, b) => b.totalCents - a.totalCents);
   const totalFaturas = faturasDoMes.reduce((sum, f) => sum + f.totalCents, 0);

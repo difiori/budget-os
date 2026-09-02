@@ -68,16 +68,16 @@ function descricaoResumo(resumo: ResumoLancamento | undefined): string | null {
  * data futura (ocorrência de recorrência/parcela) aparece como agendada. */
 function StatusTag({ saida, hoje }: { saida: Saida; hoje: CalendarDate }) {
   const pago = saida.status === "Pago";
-  const label = !pago && isSaidaFutura(saida, hoje) ? "Agendada" : saida.status;
-  return (
-    <span
-      className={`type-caption inline-block max-w-full truncate rounded-xs px-1.5 py-0.5 font-medium ${
-        pago ? "bg-brand-tint text-on-brand-tint" : "bg-warn-tint text-warn"
-      }`}
-    >
-      {label}
-    </span>
-  );
+  // Assinatura no cartão não se paga isolada: entra na fatura e é paga com ela.
+  const naFatura = saida.metodo === "Crédito" && !!saida.recorrente_id;
+  const label = naFatura ? (pago ? "Fatura paga" : "Na fatura") : !pago && isSaidaFutura(saida, hoje) ? "Agendada" : saida.status;
+  const cor = pago ? "bg-brand-tint text-on-brand-tint" : naFatura ? "bg-track text-ink-2" : "bg-warn-tint text-warn";
+  return <span className={`type-caption inline-block max-w-full truncate rounded-xs px-1.5 py-0.5 font-medium ${cor}`}>{label}</span>;
+}
+
+/** Status editável só quando pagar o item faz sentido (débito, ou crédito avulso). */
+function statusEditavel(saida: Saida): boolean {
+  return !(saida.metodo === "Crédito" && !!saida.recorrente_id);
 }
 
 /** Categoria como selo clicável: filtra a lista pela categoria. */
@@ -365,6 +365,7 @@ export function UltimasSaidas({
                         saida={s}
                         categorias={categorias}
                         destinoNome={destino(s)}
+                        statusEditavel={statusEditavel(s)}
                         onSalvo={aoMudar}
                         onExcluido={aoMudar}
                         onCancelar={() => setAbertaId(null)}

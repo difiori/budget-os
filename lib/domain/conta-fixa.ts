@@ -5,6 +5,7 @@ import {
   isSameMonth,
   parseCalendarDate,
 } from "./calendar-date";
+import { CICLO_PADRAO, type CicloCartao } from "./ciclo-cartao";
 import { calcularVencimento } from "./vencimento";
 import type { ContaFixa, MetodoPagamento, Pessoa, SaidaParaCalculo, SaidaStatus } from "./types";
 
@@ -22,10 +23,11 @@ export function vigenteNoMes(cf: Pick<ContaFixa, "ativo" | "inicio" | "fim">, me
 
 /** Data da cobrança e vencimento previstos de um contrato num mês (mesma
  * regra da RPC `garantir_ocorrencias_contas_fixas`): dia limitado ao último
- * dia do mês; vencimento pela regra 7 do método. */
+ * dia do mês; vencimento pela regra 7 do método, com o ciclo do cartão. */
 export function ocorrenciaPrevista(
   cf: Pick<ContaFixa, "dia_vencimento" | "metodo" | "total_cents">,
-  mes: CalendarDate
+  mes: CalendarDate,
+  ciclo: CicloCartao = CICLO_PADRAO
 ): { data: string; vencimento: string; total_cents: number } {
   const data: CalendarDate = {
     year: mes.year,
@@ -34,7 +36,7 @@ export function ocorrenciaPrevista(
   };
   return {
     data: formatCalendarDateISO(data),
-    vencimento: formatCalendarDateISO(calcularVencimento(data, cf.metodo)),
+    vencimento: formatCalendarDateISO(calcularVencimento(data, cf.metodo, ciclo)),
     total_cents: cf.total_cents,
   };
 }
@@ -58,7 +60,8 @@ type SaidaComContrato = Pick<SaidaParaCalculo, "data" | "created_at"> & { recorr
 export function ocorrenciasVirtuais(
   contratos: ContaFixa[],
   saidas: SaidaComContrato[],
-  meses: CalendarDate[]
+  meses: CalendarDate[],
+  cicloPorCartaoId: Map<string, CicloCartao> = new Map()
 ): SaidaVirtual[] {
   const materializadas = new Set<string>();
   for (const s of saidas) {
@@ -71,7 +74,7 @@ export function ocorrenciasVirtuais(
     for (const cf of contratos) {
       if (!vigenteNoMes(cf, mes)) continue;
       if (materializadas.has(`${cf.id}|${mes.year}-${mes.month}`)) continue;
-      const prev = ocorrenciaPrevista(cf, mes);
+      const prev = ocorrenciaPrevista(cf, mes, cf.cartao_id ? cicloPorCartaoId.get(cf.cartao_id) : undefined);
       virtuais.push({
         total_cents: prev.total_cents,
         data: prev.data,

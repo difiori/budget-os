@@ -1,4 +1,5 @@
 import { type CalendarDate, addMonths, formatCalendarDateISO } from "./calendar-date";
+import type { CicloCartao } from "./ciclo-cartao";
 import { calcularVencimento } from "./vencimento";
 import type { EntradaStatus, MetodoPagamento, Pessoa, SaidaStatus } from "./types";
 
@@ -17,6 +18,7 @@ export interface SaidaRecorrenteBase {
   categoriaId: string | null;
   contaId: string | null;
   cartaoId: string | null;
+  ciclo?: CicloCartao;
 }
 
 export interface SaidaOcorrencia {
@@ -52,7 +54,7 @@ export function gerarSaidasRecorrentes(
 
   return Array.from({ length: numeroMeses }, (_, index) => {
     const dataOcorrencia = addMonths(base.data, index);
-    const vencimento = calcularVencimento(dataOcorrencia, base.metodo);
+    const vencimento = calcularVencimento(dataOcorrencia, base.metodo, base.ciclo);
     return {
       nome: base.nome,
       total_cents: base.totalCents,

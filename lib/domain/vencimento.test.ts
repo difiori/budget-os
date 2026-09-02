@@ -26,3 +26,17 @@ describe("calcularVencimento (regra 7 — regra alvo, diferente do legado)", () 
     });
   });
 });
+
+describe("calcularVencimento com ciclo real do cartão", () => {
+  const fecha25 = { dia_fechamento: 25, dia_vencimento: 10 };
+  it("compra até o fechamento vence no mês seguinte; depois do fechamento pula mais um", () => {
+    expect(calcularVencimento({ year: 2026, month: 9, day: 20 }, "Crédito", fecha25)).toEqual({ year: 2026, month: 10, day: 10 });
+    expect(calcularVencimento({ year: 2026, month: 9, day: 28 }, "Crédito", fecha25)).toEqual({ year: 2026, month: 11, day: 10 });
+  });
+  it("fecha 5 e vence 15: vence no próprio mês da fatura", () => {
+    expect(calcularVencimento({ year: 2026, month: 9, day: 3 }, "Crédito", { dia_fechamento: 5, dia_vencimento: 15 })).toEqual({ year: 2026, month: 9, day: 15 });
+  });
+  it("débito ignora o ciclo", () => {
+    expect(calcularVencimento({ year: 2026, month: 9, day: 28 }, "Débito", fecha25)).toEqual({ year: 2026, month: 9, day: 28 });
+  });
+});

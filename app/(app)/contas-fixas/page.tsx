@@ -52,7 +52,7 @@ export default async function ContasFixasPage({
         .lt("data", fimMes),
       supabase.from("categoria").select("id, nome, dono").order("nome"),
       supabase.from("conta").select("id, nome, dono").order("nome"),
-      supabase.from("cartao").select("id, nome, dono, dia_vencimento").order("nome"),
+      supabase.from("cartao").select("id, nome, dono, dia_fechamento, dia_vencimento").order("nome"),
     ]);
 
   return (
@@ -72,7 +72,7 @@ export default async function ContasFixasPage({
         ocorrenciasIniciais={(ocorrencias ?? []) as Saida[]}
         categorias={(categorias ?? []) as Categoria[]}
         contas={(contas ?? []) as Pick<Conta, "id" | "nome" | "dono">[]}
-        cartoes={(cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_vencimento">[]}
+        cartoes={(cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_fechamento" | "dia_vencimento">[]}
         pessoaAtiva={ativa}
         mesReferencia={mesReferencia}
         hoje={referencia}

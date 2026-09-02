@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { calcularVencimento } from "@/lib/domain/vencimento";
+import { formatCalendarDateISO } from "@/lib/domain/calendar-date";
+import { dataParaCalculo } from "@/lib/domain/data-fallback";
+import type { CicloCartao } from "@/lib/domain/ciclo-cartao";
 import { parseCentsFromBRL } from "@/lib/domain/money";
 import type { CartaoTipo, CategoriaDono, Pessoa } from "@/lib/domain/types";
 
@@ -159,6 +163,7 @@ export async function atualizarCartao(id: string, formData: FormData): Promise<A
   }
 
   const supabase = await createClient();
+  const { data: anterior } = await supabase.from("cartao").select("dia_fechamento, dia_vencimento").eq("id", id).single();
   const { error } = await supabase
     .from("cartao")
     .update({
@@ -173,11 +178,47 @@ export async function atualizarCartao(id: string, formData: FormData): Promise<A
     .eq("id", id);
   if (error) return { error: mensagemErro(error) };
 
+  // Mudou o ciclo? As compras ainda não pagas passam a vencer com a fatura
+  // certa. As pagas são histórico e ficam como estão.
+  const cicloMudou = !anterior || anterior.dia_fechamento !== diaFechamento || anterior.dia_vencimento !== diaVencimento;
+  if (cicloMudou) {
+    const erroRecalc = await recalcularVencimentosDoCartao(supabase, id, { dia_fechamento: diaFechamento, dia_vencimento: diaVencimento });
+    if (erroRecalc) return { error: `Cartão salvo, mas os vencimentos não foram recalculados: ${erroRecalc}` };
+  }
+
   revalidatePath("/config");
   revalidatePath("/cartoes");
   revalidatePath("/lancar");
   revalidatePath("/contas");
+  revalidatePath("/");
+  revalidatePath("/lancamentos");
   return { error: null };
+}
+
+/** Recalcula o vencimento das compras não pagas de um cartão pelo ciclo novo. */
+async function recalcularVencimentosDoCartao(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  cartaoId: string,
+  ciclo: CicloCartao
+): Promise<string | null> {
+  const { data: saidas, error } = await supabase
+    .from("saida")
+    .select("id, data, created_at")
+    .eq("cartao_id", cartaoId)
+    .neq("status", "Pago");
+  if (error) return error.message;
+  const porVencimento = new Map<string, string[]>();
+  for (const s of (saidas ?? []) as { id: string; data: string | null; created_at: string }[]) {
+    const venc = formatCalendarDateISO(calcularVencimento(dataParaCalculo(s), "Crédito", ciclo));
+    porVencimento.set(venc, [...(porVencimento.get(venc) ?? []), s.id]);
+  }
+  for (const [vencimento, ids] of porVencimento) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error: upErr } = await supabase.from("saida").update({ vencimento }).in("id", ids.slice(i, i + 200));
+      if (upErr) return upErr.message;
+    }
+  }
+  return null;
 }
 
 export async function excluirCartao(id: string): Promise<ActionResult> {

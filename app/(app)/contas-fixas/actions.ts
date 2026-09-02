@@ -6,6 +6,7 @@ import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { addMonths, parseCalendarDate, type CalendarDate } from "@/lib/domain/calendar-date";
 import { mesISO, ocorrenciaPrevista } from "@/lib/domain/conta-fixa";
+import { cicloDoCartao, type CicloCartao } from "@/lib/domain/ciclo-cartao";
 import type { MetodoPagamento, Pessoa } from "@/lib/domain/types";
 
 type ActionResult = { error: string | null };
@@ -101,6 +102,12 @@ export async function atualizarContaFixa(
   if (error) return { error: error.message };
 
   if (opcoes.aplicarFuturas) {
+    // Ciclo do cartão (se crédito) decide o vencimento de cada ocorrência.
+    let ciclo: CicloCartao | undefined;
+    if (input.metodo === "Crédito" && input.cartaoId) {
+      const { data: k } = await supabase.from("cartao").select("dia_fechamento, dia_vencimento").eq("id", input.cartaoId).single();
+      ciclo = cicloDoCartao(k as { dia_fechamento: number; dia_vencimento: number } | null);
+    }
     const { data: futuras, error: selErr } = await supabase
       .from("saida")
       .select("id, data")
@@ -113,7 +120,8 @@ export async function atualizarContaFixa(
       const mes = parseCalendarDate(s.data);
       const prev = ocorrenciaPrevista(
         { dia_vencimento: input.diaVencimento, metodo: input.metodo, total_cents: input.totalCents },
-        { year: mes.year, month: mes.month, day: 1 }
+        { year: mes.year, month: mes.month, day: 1 },
+        ciclo
       );
       const { error: upErr } = await supabase
         .from("saida")

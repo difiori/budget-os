@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcularVencimento } from "@/lib/domain/vencimento";
+import { cicloDoCartao } from "@/lib/domain/ciclo-cartao";
 import { formatCalendarDateISO, hoje, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { gerarParcelas } from "@/lib/domain/parcelamento";
@@ -85,11 +86,11 @@ export async function POST(request: Request) {
   // Categorias/contas/cartões para resolver por nome.
   const [{ data: contasRaw }, { data: cartoesRaw }, { data: categoriasRaw }] = await Promise.all([
     supabase.from("conta").select("id, nome, dono"),
-    supabase.from("cartao").select("id, nome, dono, conta_vinculada_id"),
+    supabase.from("cartao").select("id, nome, dono, conta_vinculada_id, dia_fechamento, dia_vencimento"),
     supabase.from("categoria").select("id, nome, dono"),
   ]);
   const contas = (contasRaw ?? []) as { id: string; nome: string; dono: Pessoa }[];
-  const cartoes = (cartoesRaw ?? []) as { id: string; nome: string; dono: Pessoa; conta_vinculada_id: string | null }[];
+  const cartoes = (cartoesRaw ?? []) as { id: string; nome: string; dono: Pessoa; conta_vinculada_id: string | null; dia_fechamento: number; dia_vencimento: number }[];
   const categorias = (categoriasRaw ?? []) as { id: string; nome: string }[];
 
   const categoriaId = corpo.categoria ? resolver(categorias, String(corpo.categoria))?.id ?? null : null;
@@ -149,12 +150,13 @@ export async function POST(request: Request) {
         metodo: "Crédito",
         status,
         cartaoId: cartao.id,
+        ciclo: cicloDoCartao(cartao),
         categoriaId,
       }).map((p) => ({ ...p, editado_por: pessoa }));
       const { error } = await supabase.from("saida").insert(linhas);
       if (error) return erro(500, error.message);
     } else {
-      const vencimento = calcularVencimento(dataCompra, "Crédito");
+      const vencimento = calcularVencimento(dataCompra, "Crédito", cicloDoCartao(cartao));
       const { error } = await supabase.from("saida").insert({
         nome,
         total_cents: totalCents,

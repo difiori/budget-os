@@ -33,6 +33,7 @@ export function EditarSaidaForm({
   onSalvo,
   onExcluido,
   onCancelar,
+  statusEditavel = true,
 }: {
   saida: Saida;
   categorias: Categoria[];
@@ -40,6 +41,8 @@ export function EditarSaidaForm({
   onSalvo: () => void;
   onExcluido: () => void;
   onCancelar: () => void;
+  /** false = o status segue a fatura do cartão (assinatura fixa no crédito). */
+  statusEditavel?: boolean;
 }) {
   const [nome, setNome] = useState(nomeSemParcela(saida.nome, saida.parcela));
   const [valor, setValor] = useState(centsToInputValue(saida.total_cents));
@@ -151,11 +154,17 @@ export function EditarSaidaForm({
         </div>
         <div>
           <label className="type-caption mb-1 block text-ink-2">Status</label>
-          <div className="flex flex-wrap gap-1.5">
-            {STATUS_SAIDA.map((s) => (
-              <Chip key={s} label={s} selected={status === s} onClick={() => setStatus(s)} />
-            ))}
-          </div>
+          {statusEditavel ? (
+            <div className="flex flex-wrap gap-1.5">
+              {STATUS_SAIDA.map((s) => (
+                <Chip key={s} label={s} selected={status === s} onClick={() => setStatus(s)} />
+              ))}
+            </div>
+          ) : (
+            <p className="type-caption pt-1.5 text-ink-3">
+              {status === "Pago" ? "Fatura paga." : "Entra na fatura do cartão."} O pagamento é da fatura inteira, em Cartões.
+            </p>
+          )}
         </div>
       </div>
 
