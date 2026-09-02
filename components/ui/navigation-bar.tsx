@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Plus,
   Receipt,
+  Repeat,
   Settings,
   Tags,
   X,
@@ -34,6 +35,7 @@ const ESQUERDA: Item[] = [
 ];
 const DIREITA: Item[] = [{ href: "/cartoes", label: "Cartões", icon: CreditCard }];
 const MAIS: Item[] = [
+  { href: "/contas-fixas", label: "Contas fixas", icon: Repeat },
   { href: "/mes", label: "Resumo Mensal", icon: CalendarRange },
   { href: "/categorias", label: "Categorias", icon: Tags },
   { href: "/contas", label: "Contas", icon: Landmark },

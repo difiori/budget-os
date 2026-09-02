@@ -19,6 +19,11 @@ interface TrendChartProps {
   labels: string[];
   gastos: number[];
   entradas: number[];
+  /** Legenda própria (padrão). Desligar quando várias instâncias compartilham uma. */
+  showLegend?: boolean;
+  height?: number;
+  /** Teto sugerido do eixo Y — para vários gráficos na mesma escala. */
+  yMax?: number;
 }
 
 /** Observa o atributo data-theme para re-resolver os tokens quando o tema
@@ -64,7 +69,7 @@ function brl(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function TrendChart({ labels, gastos, entradas }: TrendChartProps) {
+export function TrendChart({ labels, gastos, entradas, showLegend = true, height = 190, yMax }: TrendChartProps) {
   useTheme();
   const cores = lerTokens();
 
@@ -80,6 +85,7 @@ export function TrendChart({ labels, gastos, entradas }: TrendChartProps) {
       },
       y: {
         min: 0,
+        suggestedMax: yMax,
         border: { display: false },
         grid: { color: cores.hairline },
         ticks: {
@@ -133,16 +139,18 @@ export function TrendChart({ labels, gastos, entradas }: TrendChartProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5 text-ink-2">
-          <span className="h-0.5 w-4 rounded-full bg-pos" aria-hidden="true" />
-          <span className="type-caption">Entradas</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-ink-2">
-          <span className="h-0.5 w-4 rounded-full bg-neg" aria-hidden="true" />
-          <span className="type-caption">Saídas</span>
-        </span>
-      </div>
+      {showLegend && (
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5 text-ink-2">
+            <span className="h-0.5 w-4 rounded-full bg-pos" aria-hidden="true" />
+            <span className="type-caption">Entradas</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-ink-2">
+            <span className="h-0.5 w-4 rounded-full bg-neg" aria-hidden="true" />
+            <span className="type-caption">Saídas</span>
+          </span>
+        </div>
+      )}
       {/* O canvas fica absoluto: a largura intrínseca dele não pode entrar no
           min-content do grid, senão a página inteira trava mais larga que o
           viewport no mobile. */}
@@ -150,7 +158,7 @@ export function TrendChart({ labels, gastos, entradas }: TrendChartProps) {
         role="img"
         aria-label="Gráfico de linha comparando entradas e saídas nos últimos meses"
         className="trend-chart-wrap"
-        style={{ position: "relative", width: "100%", height: "190px" }}
+        style={{ position: "relative", width: "100%", height: `${height}px` }}
       >
         <Line data={data} options={options} />
       </div>

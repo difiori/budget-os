@@ -26,20 +26,25 @@ function formatVenc(iso: string | null): string {
   return `vence ${day}/${month}`;
 }
 
-/** Contas a pagar do mês: saídas em débito listadas uma a uma (marca pago pela
- * tag) e os cartões de crédito agregados numa linha só (nome + fatura do mês +
- * botão que quita a fatura inteira). */
+/** Contas a pagar do mês: saídas em débito listadas uma a uma e os cartões de
+ * crédito agregados numa linha só (nome + fatura do mês). Nos dois casos a
+ * mesma tag "A pagar" em âmbar marca como pago — no cartão, quita a fatura
+ * inteira. */
 export function ContasAPagar({
   debitos,
   destinoPorId,
   cartoes,
   totalCents,
+  fixaIds = [],
 }: {
   debitos: Saida[];
   destinoPorId: Record<string, string>;
   cartoes: CartaoAPagar[];
   totalCents: number;
+  /** Ids dos débitos que vêm de uma conta fixa (ganham o selo "fixa"). */
+  fixaIds?: string[];
 }) {
+  const fixas = new Set(fixaIds);
   const [listaDeb, setListaDeb] = useState(debitos);
   const [listaCard, setListaCard] = useState(cartoes);
   const [, startTransition] = useTransition();
@@ -93,10 +98,10 @@ export function ContasAPagar({
               <button
                 type="button"
                 onClick={() => pagarCartao(c)}
-                aria-label={`Pagar fatura de ${c.nome}`}
-                className="type-caption shrink-0 rounded-xs bg-brand-tint px-2 py-1 font-medium text-on-brand-tint transition-colors hover:brightness-95"
+                aria-label={`Marcar fatura de ${c.nome} como paga`}
+                className="type-caption shrink-0 rounded-xs bg-warn-tint px-2 py-1 font-medium text-warn transition-colors hover:brightness-95"
               >
-                Pagar
+                A pagar
               </button>
             </li>
           ))}
@@ -105,7 +110,12 @@ export function ContasAPagar({
             <li key={s.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
               <PersonDot pessoa={s.pessoa} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.875rem] text-ink">{nomeComParcela(s.nome, s.parcela)}</p>
+                <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+                  <span className="truncate">{nomeComParcela(s.nome, s.parcela)}</span>
+                  {fixas.has(s.id) && (
+                    <span className="type-caption shrink-0 rounded-xs bg-track px-1 text-ink-3">fixa</span>
+                  )}
+                </p>
                 <p className="type-caption truncate text-ink-3">
                   {formatVenc(s.vencimento)} · {destinoPorId[s.id] ?? "—"}
                 </p>

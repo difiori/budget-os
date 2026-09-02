@@ -470,16 +470,22 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
 
       {permiteRecorrente && (
         <div>
-          <GrupoDeEscolha label="É recorrente?">
+          <GrupoDeEscolha label={tipo === "Saida" ? "Conta fixa?" : "É recorrente?"}>
             <Chip label="Não" selected={!recorrente} onClick={() => setRecorrente(false)} />
             <Chip label="Sim" selected={recorrente} onClick={() => setRecorrente(true)} />
           </GrupoDeEscolha>
-          {recorrente && (
+          {recorrente && tipo === "Saida" && (
+            <p className="type-caption mt-2 text-ink-2">
+              Vira uma conta fixa{previewRecorrencia ? ` de ${previewRecorrencia.valor}` : ""}, cobrada todo dia{" "}
+              {dataInput ? Number(dataInput.slice(8, 10)) : "—"}. Só este mês é lançado agora, com o status escolhido
+              acima; os seguintes aparecem quando você abrir cada mês. Gerencie em Contas fixas.
+            </p>
+          )}
+          {recorrente && tipo === "Entrada" && (
             <p className="type-caption mt-2 text-ink-2">
               Vai gerar os próximos 12 meses
               {previewRecorrencia ? ` de ${previewRecorrencia.valor} (${previewRecorrencia.periodo})` : ""}. Só este
-              primeiro fica com o status escolhido acima — os meses futuros nascem como{" "}
-              {tipo === "Entrada" ? "“A receber”" : "“A pagar”"}.
+              primeiro fica com o status escolhido acima — os meses futuros nascem como “A receber”.
             </p>
           )}
         </div>
@@ -512,7 +518,12 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
                 <ResumoLinha label="Data" value={formatDataBR(dataInput)} />
                 <ResumoLinha label="Status" value={statusResumo} />
                 {previewParcelamento && <ResumoLinha label="Parcelamento" value={previewParcelamento.texto} />}
-                {permiteRecorrente && recorrente && <ResumoLinha label="Recorrência" value="Próximos 12 meses" />}
+                {permiteRecorrente && recorrente && (
+                  <ResumoLinha
+                    label={tipo === "Saida" ? "Conta fixa" : "Recorrência"}
+                    value={tipo === "Saida" ? "Mensal, sem prazo" : "Próximos 12 meses"}
+                  />
+                )}
               </>
             )}
           </dl>

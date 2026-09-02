@@ -5,9 +5,10 @@ import { calcularVencimento } from "@/lib/domain/vencimento";
 import { formatCalendarDateISO, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { parseCentsFromBRL } from "@/lib/domain/money";
 import { gerarParcelas } from "@/lib/domain/parcelamento";
-import { gerarEntradasRecorrentes, gerarSaidasRecorrentes } from "@/lib/domain/recorrencia";
+import { gerarEntradasRecorrentes } from "@/lib/domain/recorrencia";
+import { mesISO } from "@/lib/domain/conta-fixa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
-import type { EntradaStatus, FormatoCompra, Pessoa, SaidaStatus } from "@/lib/domain/types";
+import type { EntradaStatus, FormatoCompra, MetodoPagamento, Pessoa, SaidaStatus } from "@/lib/domain/types";
 
 export interface CriarLancamentoState {
   status: "idle" | "success" | "error";
@@ -115,7 +116,7 @@ export async function criarLancamento(
 
   if (modo === "Debito") {
     if (recorrente) {
-      const ocorrencias = gerarSaidasRecorrentes({
+      const erro = await criarContaFixaComPrimeiraOcorrencia(supabase, {
         nome,
         totalCents,
         data: dataCompra,
@@ -125,9 +126,9 @@ export async function criarLancamento(
         categoriaId,
         contaId: destinoId,
         cartaoId: null,
-      }).map((ocorrencia) => ({ ...ocorrencia, editado_por: editadoPor }));
-      const { error } = await supabase.from("saida").insert(ocorrencias);
-      if (error) return { status: "error", message: error.message };
+        editadoPor,
+      });
+      if (erro) return { status: "error", message: erro };
     } else {
       const vencimento = calcularVencimento(dataCompra, "Débito");
       const { error } = await supabase.from("saida").insert({
@@ -183,7 +184,7 @@ export async function criarLancamento(
     const { error } = await supabase.from("saida").insert(parcelas);
     if (error) return { status: "error", message: error.message };
   } else if (recorrente) {
-    const ocorrencias = gerarSaidasRecorrentes({
+    const erro = await criarContaFixaComPrimeiraOcorrencia(supabase, {
       nome,
       totalCents,
       data: dataCompra,
@@ -193,9 +194,9 @@ export async function criarLancamento(
       categoriaId,
       contaId: null,
       cartaoId: destinoId,
-    }).map((ocorrencia) => ({ ...ocorrencia, editado_por: editadoPor }));
-    const { error } = await supabase.from("saida").insert(ocorrencias);
-    if (error) return { status: "error", message: error.message };
+      editadoPor,
+    });
+    if (erro) return { status: "error", message: erro };
   } else {
     const vencimento = calcularVencimento(dataCompra, "Crédito");
     const { error } = await supabase.from("saida").insert({
@@ -229,6 +230,66 @@ export async function criarLancamento(
   }
 
   return { status: "success" };
+}
+
+/**
+ * Saída marcada como conta fixa: cria o CONTRATO (tabela `recorrente`) e só a
+ * ocorrência deste mês. Os meses seguintes são materializados quando alguém
+ * abre o mês (garantir_ocorrencias_contas_fixas) — nada é gerado às cegas.
+ * Retorna a mensagem de erro, ou null.
+ */
+async function criarContaFixaComPrimeiraOcorrencia(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  p: {
+    nome: string;
+    totalCents: number;
+    data: ReturnType<typeof parseCalendarDate>;
+    pessoa: Pessoa;
+    metodo: MetodoPagamento;
+    status: SaidaStatus;
+    categoriaId: string | null;
+    contaId: string | null;
+    cartaoId: string | null;
+    editadoPor: Pessoa;
+  }
+): Promise<string | null> {
+  const { data: contrato, error } = await supabase
+    .from("recorrente")
+    .insert({
+      nome: p.nome,
+      total_cents: p.totalCents,
+      pessoa: p.pessoa,
+      metodo: p.metodo,
+      categoria_id: p.categoriaId,
+      conta_id: p.contaId,
+      cartao_id: p.cartaoId,
+      dia_vencimento: p.data.day,
+      inicio: mesISO(p.data),
+      fim: null,
+      ativo: true,
+      editado_por: p.editadoPor,
+    })
+    .select("id")
+    .single();
+  if (error || !contrato) return error?.message ?? "Não foi possível criar a conta fixa.";
+
+  const vencimento = calcularVencimento(p.data, p.metodo);
+  const { error: ocErr } = await supabase.from("saida").insert({
+    nome: p.nome,
+    total_cents: p.totalCents,
+    data: formatCalendarDateISO(p.data),
+    vencimento: formatCalendarDateISO(vencimento),
+    pessoa: p.pessoa,
+    metodo: p.metodo,
+    status: p.status,
+    origem: "Recorrente",
+    categoria_id: p.categoriaId,
+    conta_id: p.contaId,
+    cartao_id: p.cartaoId,
+    recorrente_id: contrato.id,
+    editado_por: p.editadoPor,
+  });
+  return ocErr?.message ?? null;
 }
 
 /**

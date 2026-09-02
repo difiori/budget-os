@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowDownUp, ArrowDown, ArrowUp, ListChecks, Search, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { ListChecks, Search, SlidersHorizontal, X } from "lucide-react";
+import { SortMenu } from "@/components/ui/sort-menu";
+import { useClickFora } from "@/components/ui/use-click-fora";
 import type { Pessoa } from "@/lib/domain/types";
 
 export type TipoLanc = "Saida" | "Entrada" | "Transferencia";
@@ -107,20 +109,6 @@ const CAMPOS: { value: CampoOrdenacao; label: string }[] = [
   { value: "nome", label: "Nome" },
   { value: "categoria", label: "Categoria" },
 ];
-
-/** Fecha ao clicar fora. */
-function useClickFora<T extends HTMLElement>(aberto: boolean, fechar: () => void) {
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    if (!aberto) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) fechar();
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [aberto, fechar]);
-  return ref;
-}
 
 function Segmento<T extends string>({
   valor,
@@ -268,9 +256,7 @@ export function FiltrosBar({
   totalVisivel: number;
 }) {
   const [painelAberto, setPainelAberto] = useState(false);
-  const [ordAberto, setOrdAberto] = useState(false);
   const painelRef = useClickFora<HTMLDivElement>(painelAberto, () => setPainelAberto(false));
-  const ordRef = useClickFora<HTMLDivElement>(ordAberto, () => setOrdAberto(false));
 
   const nCats = new Map(categorias.map((c) => [c.value, c.label]));
   const nContas = new Map(contasCartoes.map((c) => [c.value, c.label]));
@@ -279,8 +265,6 @@ export function FiltrosBar({
   function toggle<T>(lista: T[], v: T): T[] {
     return lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v];
   }
-
-  const campoLabel = CAMPOS.find((c) => c.value === ordenacao.campo)?.label ?? "Data";
 
   // Chips de filtros ativos (cada valor removível individualmente).
   const chips: { id: string; label: string; remover: () => void }[] = [];
@@ -337,43 +321,7 @@ export function FiltrosBar({
         />
 
         {/* Ordenar */}
-        <div ref={ordRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setOrdAberto((v) => !v)}
-            aria-expanded={ordAberto}
-            className="type-label flex items-center gap-1.5 rounded-sm border border-hairline-strong bg-surface px-3 py-2.5 text-ink-2 transition-colors hover:border-ink-3"
-          >
-            <ArrowDownUp size={15} />
-            {campoLabel}
-            {ordenacao.direcao === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
-          </button>
-          {ordAberto && (
-            <div className="absolute right-0 z-30 mt-1.5 w-44 overflow-hidden rounded-sm border border-hairline bg-raised py-1 shadow-raised">
-              {CAMPOS.map((c) => {
-                const ativo = ordenacao.campo === c.value;
-                return (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() =>
-                      onOrdenar({
-                        campo: c.value,
-                        direcao: ativo ? (ordenacao.direcao === "asc" ? "desc" : "asc") : "desc",
-                      })
-                    }
-                    className={`type-body flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-brand-tint ${
-                      ativo ? "text-ink" : "text-ink-2"
-                    }`}
-                  >
-                    {c.label}
-                    {ativo && (ordenacao.direcao === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <SortMenu opcoes={CAMPOS} ordenacao={ordenacao} onOrdenar={onOrdenar} />
 
         {/* Filtros */}
         <div ref={painelRef} className="relative">

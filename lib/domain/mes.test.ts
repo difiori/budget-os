@@ -7,7 +7,9 @@ import {
   resolverContaEfetivaDaSaida,
   resumoContaMes,
   saidasAPagarDoMesCents,
+  saldoInicioMesCents,
   saldoPrevistoCents,
+  usoDoDisponivelPct,
 } from "./mes";
 import type { SaidaParaCalculo } from "./types";
 
@@ -179,5 +181,74 @@ describe("resumoContaMes (regressão do bug: crédito não descontava do saldo p
     expect(resultado.gastos).toBe(20000); // movimento bruto ainda aparece
     expect(resultado.aPagar).toBe(0); // mas não pesa no previsto
     expect(resultado.saldoPrevisto).toBe(80000);
+  });
+});
+
+describe("saldoInicioMesCents (reconstruído do saldo atual)", () => {
+  const conta = { id: CONTA, saldo_atual_cents: 100000 };
+  const setembro = { year: 2026, month: 9, day: 1 };
+  const entrada = (o: Partial<{ quantia_cents: number; data: string; status: "Recebido" | "Não recebido"; conta_destino_id: string }>) => ({
+    quantia_cents: 0,
+    data: "2026-09-05",
+    status: "Recebido" as const,
+    conta_destino_id: CONTA,
+    ...o,
+  });
+  const saidaSt = (o: Partial<SaidaParaCalculo & { status: "Pago" | "A pagar" }>) => ({
+    ...saida({ vencimento: "2026-09-10" }),
+    status: "Pago" as const,
+    ...o,
+  });
+
+  it("desfaz entradas recebidas e saídas pagas do mês em diante", () => {
+    const entradas = [entrada({ quantia_cents: 50000, data: "2026-09-05" }), entrada({ quantia_cents: 7000, data: "2026-10-02" })];
+    const saidas = [saidaSt({ total_cents: 20000, vencimento: "2026-09-10" }), saidaSt({ total_cents: 3000, vencimento: "2026-10-10" })];
+    // 100000 − 50000 − 7000 + 20000 + 3000
+    expect(saldoInicioMesCents(conta, saidas, entradas, setembro)).toBe(66000);
+  });
+
+  it("antecipa pendências de antes do mês (ainda vão liquidar)", () => {
+    const entradas = [entrada({ quantia_cents: 30000, data: "2026-08-20", status: "Não recebido" })];
+    const saidas = [saidaSt({ total_cents: 10000, vencimento: "2026-08-25", status: "A pagar" })];
+    expect(saldoInicioMesCents(conta, saidas, entradas, setembro)).toBe(120000);
+  });
+
+  it("ignora pendências do próprio mês e liquidações de antes do mês", () => {
+    const entradas = [
+      entrada({ quantia_cents: 30000, data: "2026-09-20", status: "Não recebido" }),
+      entrada({ quantia_cents: 99999, data: "2026-08-05", status: "Recebido" }),
+    ];
+    const saidas = [
+      saidaSt({ total_cents: 10000, vencimento: "2026-09-25", status: "A pagar" }),
+      saidaSt({ total_cents: 88888, vencimento: "2026-08-10", status: "Pago" }),
+      saidaSt({ total_cents: 777, vencimento: null }),
+    ];
+    expect(saldoInicioMesCents(conta, saidas, entradas, setembro)).toBe(100000);
+  });
+
+  it("só considera lançamentos da própria conta", () => {
+    const entradas = [entrada({ quantia_cents: 50000, conta_destino_id: "outra" })];
+    const saidas = [saidaSt({ total_cents: 20000, conta_id: "outra" })];
+    expect(saldoInicioMesCents(conta, saidas, entradas, setembro)).toBe(100000);
+  });
+
+  it("resumoContaMes expõe o saldo inicial resolvendo crédito pela conta vinculada", () => {
+    const vinculo = new Map([["cartao-1", CONTA]]);
+    const saidas = [
+      { ...saida({ total_cents: 15000, vencimento: "2026-09-10", conta_id: null, cartao_id: "cartao-1" }), metodo: "Crédito" as const, status: "Pago" as const },
+    ];
+    const r = resumoContaMes(conta, saidas, [], setembro, vinculo);
+    expect(r.saldoInicio).toBe(115000);
+  });
+});
+
+describe("usoDoDisponivelPct", () => {
+  it("saídas sobre saldo inicial + entradas do mês", () => {
+    // Entrada grande no mês anterior fica no saldo inicial e entra na base.
+    expect(usoDoDisponivelPct(30000, 50000, 10000)).toBe(50);
+  });
+  it("sem disponível positivo, não inventa percentual", () => {
+    expect(usoDoDisponivelPct(30000, -20000, 10000)).toBeNull();
+    expect(usoDoDisponivelPct(0, 0, 0)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { labelMes } from "@/lib/format/meses";
 import { LancamentosList } from "./lancamentos-list";
@@ -41,6 +42,9 @@ export default async function LancamentosPage({
   const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
   const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
 
+  // Contas fixas: abrir o mês materializa as ocorrências que faltam (só dele).
+  await garantirOcorrenciasDoMes(supabase, mesReferencia);
+
   // Busca todos os tipos do mês (casal), sem recorte por pessoa/tipo/categoria —
   // o filtro agora é 100% no cliente, instantâneo. O mês já limita o volume.
   const [saidas, entradas, transferencias, { data: categorias }, { data: contas }, { data: cartoes }] =
@@ -49,7 +53,7 @@ export default async function LancamentosPage({
         supabase
           .from("saida")
           .select(
-            "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por"
+            "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por, recorrente_id"
           )
           .gte("vencimento", inicioMes)
           .lt("vencimento", fimMes)

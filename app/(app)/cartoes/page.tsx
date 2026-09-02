@@ -4,6 +4,7 @@ import { MonthSelector } from "@/components/ui/month-selector";
 import { ChipLink } from "@/components/ui/chip-link";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
@@ -35,6 +36,9 @@ export default async function CartoesPage({
   };
   const mesAnterior = addMonths(mesReferencia, -1);
   const mesSeguinte = addMonths(mesReferencia, 1);
+
+  // Assinaturas no cartão são contas fixas: abrir o mês materializa as que faltam.
+  await garantirOcorrenciasDoMes(supabase, mesReferencia);
 
   let cartoesQuery = supabase
     .from("cartao")

@@ -69,6 +69,30 @@ export interface Saida {
   created_at: string;
   editado_por?: Pessoa;
   atualizado_em?: string;
+  /** Contrato de conta fixa que gerou esta ocorrência (null = avulsa). */
+  recorrente_id?: string | null;
+}
+
+/**
+ * Conta fixa: o CONTRATO (aluguel, condomínio, assinatura) que gera uma saída
+ * por mês enquanto vigente. Mora na tabela `recorrente`. `inicio`/`fim` são
+ * sempre o 1º dia do mês (ISO); `fim` nulo = sem prazo.
+ */
+export interface ContaFixa {
+  id: string;
+  nome: string;
+  total_cents: number;
+  pessoa: Pessoa;
+  metodo: MetodoPagamento;
+  categoria_id: string | null;
+  conta_id: string | null;
+  cartao_id: string | null;
+  dia_vencimento: number;
+  ativo: boolean;
+  inicio: string;
+  fim: string | null;
+  observacao?: string | null;
+  created_at: string;
 }
 
 export interface MetaPoupanca {

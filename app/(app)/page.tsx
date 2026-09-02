@@ -4,10 +4,12 @@ import { MonthSelector } from "@/components/ui/month-selector";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
-import { ProgressBar } from "@/components/ui/progress-bar";
-import { TrendChart } from "@/components/dashboard/trend-chart";
 import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
 import { ContasAPagar } from "@/components/dashboard/contas-a-pagar";
+import { UsoDaRendaCard } from "@/components/dashboard/uso-da-renda";
+import { Projecao } from "@/components/dashboard/projecao";
+import { EntradasSaidas } from "@/components/dashboard/entradas-saidas";
+import { SaidasPorCategoria } from "@/components/dashboard/saidas-por-categoria";
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -15,9 +17,12 @@ import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
 import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
-import { formatCentsToBRL } from "@/lib/domain/money";
+import { faturaAtualCents } from "@/lib/domain/fatura";
+import { resumirLancamentos, saidasDoMesPorData } from "@/lib/domain/feed-saidas";
+import { ocorrenciasVirtuais } from "@/lib/domain/conta-fixa";
+import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { labelMes, MESES_ABREV } from "@/lib/format/meses";
-import type { Categoria, Conta, Entrada, Pessoa, Saida } from "@/lib/domain/types";
+import type { Cartao, Categoria, Conta, ContaFixa, Entrada, Pessoa, Saida } from "@/lib/domain/types";
 
 function pessoaResumo(
   pessoa: Pessoa,
@@ -34,7 +39,7 @@ function pessoaResumo(
   const saldoAtualTotal = contasPessoa.reduce((sum, conta) => sum + conta.saldo_atual_cents, 0);
   const totais = contasPessoa.reduce(
     (acc, conta) => {
-      const { saldoPrevisto, aReceber, aPagar } = resumoContaMes(
+      const { saldoPrevisto, saldoInicio, aReceber, aPagar } = resumoContaMes(
         conta,
         saidasPessoa,
         entradasPessoa,
@@ -42,11 +47,12 @@ function pessoaResumo(
         contaVinculadaPorCartaoId
       );
       acc.saldoPrevistoTotal += saldoPrevisto;
+      acc.saldoInicioTotal += saldoInicio;
       acc.aReceberTotal += aReceber;
       acc.aPagarTotal += aPagar;
       return acc;
     },
-    { saldoPrevistoTotal: 0, aReceberTotal: 0, aPagarTotal: 0 }
+    { saldoPrevistoTotal: 0, saldoInicioTotal: 0, aReceberTotal: 0, aPagarTotal: 0 }
   );
 
   const saidasMes = gastosPorMes(saidasPessoa, [mesReferencia])[0];
@@ -67,59 +73,6 @@ function corSaldo(saldoCents: number, limiteCents: number): string {
   return "text-neg";
 }
 
-/** Fração das entradas do mês já comprometida com saídas. null = sem
- * entradas registradas (estado declarado, nunca um score inventado). */
-function usoDaRenda(resumo: { saidasMes: number; entradasMes: number }): number | null {
-  if (resumo.entradasMes <= 0) return null;
-  return (resumo.saidasMes / resumo.entradasMes) * 100;
-}
-
-function UsoDaRendaCard({
-  pessoa,
-  resumo,
-}: {
-  pessoa: Pessoa;
-  resumo: ReturnType<typeof pessoaResumo>;
-}) {
-  const pct = usoDaRenda(resumo);
-  const barColor = pct === null ? "bg-track" : pct > 100 ? "bg-neg" : pct > 80 ? "bg-warn" : "bg-pos";
-
-  return (
-    <Card className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <PersonTag pessoa={pessoa} />
-        {pct !== null && (
-          <p className="figures type-title text-ink">
-            {Math.round(pct)}
-            <span className="type-label text-ink-3">%</span>
-          </p>
-        )}
-      </div>
-
-      {pct === null ? (
-        <p className="type-body text-ink-2">
-          {resumo.saidasMes > 0
-            ? `Sem entradas registradas no mês — ${formatCentsToBRL(resumo.saidasMes)} em saídas.`
-            : "Sem movimentações neste mês."}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <ProgressBar percent={pct} colorClassName={barColor} />
-          <p className="type-caption text-ink-2">
-            <span className="figures">{formatCentsToBRL(resumo.saidasMes)}</span> de{" "}
-            <span className="figures">{formatCentsToBRL(resumo.entradasMes)}</span> das entradas usados
-          </p>
-        </div>
-      )}
-
-      <div className="flex items-baseline justify-between border-t border-hairline pt-3">
-        <p className="type-caption text-ink-3">Saldo previsto</p>
-        <Amount cents={resumo.saldoPrevistoTotal} className="type-body font-medium text-ink" />
-      </div>
-    </Card>
-  );
-}
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -136,6 +89,8 @@ export default async function DashboardPage({
   const mesAnterior = addMonths(mesReferencia, -1);
   const mesSeguinte = addMonths(mesReferencia, 1);
   const meses6 = ultimosMeses(mesReferencia, 6);
+  const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
+  const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
 
   const {
     data: { user },
@@ -143,7 +98,10 @@ export default async function DashboardPage({
   const contaAtiva = (await getContaAtiva()) ?? pessoaPorEmail(user?.email) ?? "Diego";
 
   const saidaColunasRecentes =
-    "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at";
+    "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, recorrente_id";
+
+  // Contas fixas: abrir o mês materializa as ocorrências que faltam (só dele).
+  await garantirOcorrenciasDoMes(supabase, mesReferencia);
 
   const [
     { data: contas },
@@ -151,8 +109,7 @@ export default async function DashboardPage({
     entradasTodas,
     { data: categorias },
     { data: cartoes },
-    { data: recentesDiego },
-    { data: recentesVitor },
+    { data: contratos },
   ] = await Promise.all([
     supabase.from("conta").select("id, nome, dono, saldo_atual_cents, limite_cheque_especial_cents"),
     // Paginado: a tabela `saida` passa de 1000 linhas, e o limite padrão do
@@ -170,31 +127,17 @@ export default async function DashboardPage({
         .range(from, to)
     ),
     supabase.from("categoria").select("id, nome, dono"),
-    supabase.from("cartao").select("id, nome, conta_vinculada_id"),
-    // "Últimas saídas" é um feed de recência: as saídas registradas mais
-    // recentemente (por created_at), não por vencimento — muitas nem têm
-    // vencimento. Buscadas por pessoa (a importação histórica gravou uma
-    // pessoa antes da outra, então um corte único deixaria a outra de fora),
-    // ordenadas pela data de criação, as 30 mais novas de cada.
+    supabase.from("cartao").select("id, nome, dono, dia_vencimento, conta_vinculada_id"),
     supabase
-      .from("saida")
-      .select(saidaColunasRecentes)
-      .eq("pessoa", "Diego")
-      .order("created_at", { ascending: false })
-      .limit(30),
-    supabase
-      .from("saida")
-      .select(saidaColunasRecentes)
-      .eq("pessoa", "Vitor")
-      .order("created_at", { ascending: false })
-      .limit(30),
+      .from("recorrente")
+      .select("id, nome, total_cents, pessoa, metodo, categoria_id, conta_id, cartao_id, dia_vencimento, ativo, inicio, fim, created_at"),
   ]);
 
   const todasContas = (contas ?? []) as Conta[];
   const todasSaidas = saidasTodas;
   const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
-  const listaCartoes = (cartoes ?? []) as { id: string; nome: string; conta_vinculada_id: string | null }[];
+  const listaCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_vencimento" | "conta_vinculada_id">[];
   const contaVinculadaPorCartaoId = new Map(listaCartoes.map((c) => [c.id, c.conta_vinculada_id]));
   const contaPorId = new Map(todasContas.map((c) => [c.id, c.nome]));
   const cartaoPorId = new Map(listaCartoes.map((c) => [c.id, c.nome]));
@@ -209,32 +152,57 @@ export default async function DashboardPage({
   // Projeção do casal pros próximos 6 meses (mês em foco incluso) — depende
   // só de parcelas/recorrências já lançadas, não é estimativa estatística.
   const mesesProjecao = Array.from({ length: 6 }, (_, i) => addMonths(mesReferencia, i));
-  const projecao = projecaoSaldoMeses(todasContas, todasSaidas, todasEntradas, mesesProjecao, contaVinculadaPorCartaoId);
+  // Contas fixas de meses ainda não abertos não existem no banco; entram na
+  // projeção como ocorrências virtuais (mesmo valor, "A pagar"), sem gravar.
+  const listaContratos = (contratos ?? []) as ContaFixa[];
+  const saidasProjecao = [...todasSaidas, ...ocorrenciasVirtuais(listaContratos, todasSaidas, mesesProjecao)];
+  const projetar = (contas: Conta[]) =>
+    projecaoSaldoMeses(contas, saidasProjecao, todasEntradas, mesesProjecao, contaVinculadaPorCartaoId).map(
+      (p) => p.saldoTotal
+    );
+  const projecaoDiego = projetar(todasContas.filter((c) => c.dono === "Diego"));
+  const projecaoVitor = projetar(todasContas.filter((c) => c.dono === "Vitor"));
+  const projecaoCasal = projetar(todasContas);
 
-  const gastosTrend = gastosPorMes(todasSaidas, meses6);
-  const entradasTrend = entradasPorMes(todasEntradas, meses6);
+  // Tendência por pessoa (pela pessoa do lançamento) e do casal, mesma janela.
+  const serieDe = (pessoa?: Pessoa) => ({
+    gastos: gastosPorMes(pessoa ? todasSaidas.filter((s) => s.pessoa === pessoa) : todasSaidas, meses6),
+    entradas: entradasPorMes(pessoa ? todasEntradas.filter((e) => e.pessoa === pessoa) : todasEntradas, meses6),
+  });
   const labelsTrend = meses6.map((m) => MESES_ABREV[m.month - 1]);
 
-  const categoriaTotais = gastosPorCategoria(todasSaidas, mesReferencia);
-  const categoriasOrdenadas = [...categoriaTotais.entries()]
-    .map(([categoriaId, total]) => ({
-      categoria: todasCategorias.find((c) => c.id === categoriaId),
-      total,
-    }))
-    .filter((c): c is { categoria: Categoria; total: number } => Boolean(c.categoria))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 6);
-  const maiorCategoriaTotal = categoriasOrdenadas[0]?.total ?? 1;
-  const totalCategorias = categoriasOrdenadas.reduce((sum, c) => sum + c.total, 0);
+  // Saídas por categoria seguem o "Vendo como" (pela pessoa do lançamento),
+  // como o saldo e as contas a pagar — não o casal.
+  const saidasDaPessoa = todasSaidas.filter((s) => s.pessoa === contaAtiva);
+  const categoriaTotais = gastosPorCategoria(saidasDaPessoa, mesReferencia);
+  const categoriaNomePorId = new Map(todasCategorias.map((c) => [c.id, c.nome]));
+  const linhasCategoria = [...categoriaTotais.entries()]
+    .map(([id, total]) => ({ id, nome: categoriaNomePorId.get(id) ?? "Categoria removida", total }))
+    .sort((a, b) => b.total - a.total);
+  const semCategoriaTotal = saidasDaPessoa
+    .filter((s) => !s.categoria_id && !!s.vencimento && s.vencimento >= inicioMes && s.vencimento < fimMes)
+    .reduce((sum, s) => sum + s.total_cents, 0);
 
-  const saidasRecentes = [...((recentesDiego ?? []) as Saida[]), ...((recentesVitor ?? []) as Saida[])].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at)
+  // "Últimas saídas" é o recorte do mês em foco pela DATA DA COMPRA (não por
+  // vencimento, que jogaria a compra no crédito de hoje pro mês que vem; nem
+  // por created_at solto, que despejava as 12 ocorrências de um parcelamento
+  // ou recorrência lançados hoje na lista deste mês). O resumo diz de onde
+  // cada ocorrência veio ("12x · total", "recorrente até") sem listar irmãs.
+  // Contas fixas (ocorrências de contrato) saem do feed de saídas e ganham um
+  // box próprio logo abaixo, com os mesmos controles.
+  const avulsas = todasSaidas.filter((s) => !s.recorrente_id);
+  const saidasFeed = saidasDoMesPorData(avulsas, mesReferencia);
+  const idsFeed = new Set(saidasFeed.map((s) => s.id));
+  const resumosFeed = Object.fromEntries(
+    [...resumirLancamentos(avulsas)].filter(([id]) => idsFeed.has(id))
+  );
+  const fixasFeed = saidasDoMesPorData(
+    todasSaidas.filter((s) => s.recorrente_id),
+    mesReferencia
   );
 
   // Contas a pagar do MÊS selecionado (perfil ativo): saídas ainda não pagas
   // com vencimento no mês, vencimento mais próximo primeiro.
-  const inicioMes = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
-  const fimMes = `${mesSeguinte.year}-${String(mesSeguinte.month).padStart(2, "0")}-01`;
   const pendentesMes = todasSaidas.filter(
     (s) =>
       s.pessoa === contaAtiva &&
@@ -275,6 +243,21 @@ export default async function DashboardPage({
   // Contas do perfil ativo, pro detalhamento do saldo no card principal.
   const contasDaPessoa = todasContas.filter((c) => c.dono === contaAtiva);
 
+  // Faturas dos cartões da pessoa ativa: compras do mês em foco (regras 1-2,
+  // mesma base da tela Cartões), que vencem no dia do cartão do mês seguinte.
+  const dd = (n: number) => String(n).padStart(2, "0");
+  const faturasDoMes = listaCartoes
+    .filter((c) => c.dono === contaAtiva)
+    .map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      totalCents: faturaAtualCents(c.id, todasSaidas, mesReferencia),
+      vence: `${dd(c.dia_vencimento)}/${dd(mesSeguinte.month)}`,
+    }))
+    .filter((f) => f.totalCents !== 0)
+    .sort((a, b) => b.totalCents - a.totalCents);
+  const totalFaturas = faturasDoMes.reduce((sum, f) => sum + f.totalCents, 0);
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
       <PageHeader title="Painel" subtitle={`Vendo como ${contaAtiva}`}>
@@ -289,12 +272,13 @@ export default async function DashboardPage({
         <Card variant="glass" className="flex flex-col gap-5 p-6 lg:col-span-2">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="type-eyebrow text-ink-3">Saldo previsto · {labelMes(mesReferencia)}</p>
+              <p className="type-eyebrow text-ink-3">Saldo atual</p>
               <p className="type-hero mt-2 text-ink">
-                <Amount cents={ativo.saldoPrevistoTotal} />
+                <Amount cents={ativo.saldoAtualTotal} />
               </p>
               <p className="type-label mt-2 text-ink-2">
-                Saldo atual <Amount cents={ativo.saldoAtualTotal} className="font-medium" />
+                Saldo previsto · {labelMes(mesReferencia)}{" "}
+                <Amount cents={ativo.saldoPrevistoTotal} className="font-medium" />
               </p>
             </div>
             <PersonTag pessoa={contaAtiva} />
@@ -341,6 +325,32 @@ export default async function DashboardPage({
             </div>
           )}
 
+          {faturasDoMes.length > 0 && (
+            <div className="border-t border-hairline pt-4">
+              <div className="mb-2.5 flex items-baseline justify-between gap-3">
+                <p className="type-eyebrow text-ink-3">Faturas de cartão</p>
+                <p className="type-caption text-ink-3">compras de {MESES_ABREV[mesReferencia.month - 1]}</p>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {faturasDoMes.map((f) => (
+                  <li key={f.id} className="flex items-baseline justify-between gap-3">
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="truncate text-[0.875rem] text-ink-2">{f.nome}</span>
+                      <span className="type-caption shrink-0 text-ink-3">vence {f.vence}</span>
+                    </span>
+                    <Amount cents={f.totalCents} semantic="none" className="text-[0.875rem] font-medium text-ink" />
+                  </li>
+                ))}
+                {faturasDoMes.length > 1 && (
+                  <li className="flex items-baseline justify-between gap-3 border-t border-hairline pt-2">
+                    <span className="type-caption text-ink-3">Total das faturas</span>
+                    <Amount cents={totalFaturas} semantic="none" className="text-[0.875rem] font-medium text-ink" />
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
           {/* Casal: fecho curto do card (atual + previsto do casal). */}
           <div className="border-t border-hairline pt-4">
             <p className="type-eyebrow mb-2.5 text-ink-3">Casal</p>
@@ -360,79 +370,81 @@ export default async function DashboardPage({
           destinoPorId={destinoAPagar}
           cartoes={cartoesAPagar}
           totalCents={aPagarTotal}
+          fixaIds={debitosAPagar.filter((s) => s.recorrente_id).map((s) => s.id)}
         />
       </div>
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
           <h2 className="type-title text-ink">Uso da renda</h2>
-          <p className="type-caption text-ink-3">quanto das entradas já foi para saídas</p>
+          <p className="type-caption text-ink-3">saídas do mês sobre o disponível: saldo no início do mês + entradas</p>
         </div>
         {/* Duas colunas de uso (Diego, Vitor) + uma de "para onde foi" quando há
             gastos — assim a linha ocupa a largura toda, sem espaço morto. */}
-        <div
-          className={`grid grid-cols-1 gap-5 sm:grid-cols-2 ${
-            categoriasOrdenadas.length > 0 ? "lg:grid-cols-3" : "lg:max-w-2xl"
-          }`}
-        >
-          <UsoDaRendaCard pessoa="Diego" resumo={diego} />
-          <UsoDaRendaCard pessoa="Vitor" resumo={vitor} />
-          {categoriasOrdenadas.length > 0 && (
-            <Card className="flex flex-col gap-3.5 sm:col-span-2 lg:col-span-1">
-              <div className="flex items-baseline justify-between">
-                <p className="type-title text-ink">Saídas por categoria</p>
-                <p className="type-caption text-ink-3">{labelMes(mesReferencia)}</p>
-              </div>
-              {categoriasOrdenadas.map(({ categoria, total }) => (
-                <div key={categoria.id} className="flex flex-col gap-1.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-[0.875rem] text-ink">{categoria.nome}</span>
-                    <span className="flex shrink-0 items-baseline gap-2">
-                      <span className="type-caption figures text-ink-3">
-                        {totalCategorias > 0 ? Math.round((total / totalCategorias) * 100) : 0}%
-                      </span>
-                      <Amount cents={total} semantic="none" className="text-[0.875rem] text-ink-2" />
-                    </span>
-                  </div>
-                  <ProgressBar percent={(total / maiorCategoriaTotal) * 100} heightClassName="h-1" />
-                </div>
-              ))}
-            </Card>
-          )}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <UsoDaRendaCard pessoa="Diego" resumo={diego} mesReferencia={mesReferencia} />
+          <UsoDaRendaCard pessoa="Vitor" resumo={vitor} mesReferencia={mesReferencia} />
+          <SaidasPorCategoria
+            pessoa={contaAtiva}
+            mesLabel={labelMes(mesReferencia)}
+            linhas={linhasCategoria}
+            semCategoria={semCategoriaTotal}
+          />
         </div>
       </section>
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
           <h2 className="type-title text-ink">Projeção — próximos 6 meses</h2>
-          <p className="type-caption text-ink-3">saldo do casal, a partir do já lançado</p>
+          <p className="type-caption text-ink-3">saldo previsto de cada um e do casal, a partir do já lançado</p>
         </div>
-        <Card className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
-          {projecao.map(({ mes, saldoTotal }, i) => (
-            <div key={i} className="flex flex-col gap-1">
-              <span className="type-caption text-ink-3">{i === 0 ? "Este mês" : labelMes(mes)}</span>
-              <Amount cents={saldoTotal} semantic="both" className="type-body font-medium" />
-            </div>
-          ))}
-        </Card>
+        <Projecao meses={mesesProjecao} diego={projecaoDiego} vitor={projecaoVitor} casal={projecaoCasal} />
       </section>
 
       <section className="mt-8">
-        <h2 className="type-title mb-3 text-ink">Entradas x saídas — últimos 6 meses</h2>
-        <Card>
-          <TrendChart labels={labelsTrend} gastos={gastosTrend} entradas={entradasTrend} />
-        </Card>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Entradas x saídas — últimos 6 meses</h2>
+          <p className="type-caption text-ink-3">cada um e o casal, na mesma escala</p>
+        </div>
+        <EntradasSaidas labels={labelsTrend} diego={serieDe("Diego")} vitor={serieDe("Vitor")} casal={serieDe()} />
       </section>
 
       <section className="mt-8">
-        <h2 className="type-title mb-3 text-ink">Últimas saídas</h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Últimas saídas</h2>
+          <p className="type-caption text-ink-3">compras com data em {labelMes(mesReferencia)}, da mais recente registrada</p>
+        </div>
         <UltimasSaidas
-          saidas={saidasRecentes}
+          saidas={saidasFeed}
+          resumos={resumosFeed}
           categorias={todasCategorias}
           contaPorId={contaPorId}
           cartaoPorId={cartaoPorId}
           mesReferencia={mesReferencia}
+          hoje={referencia}
           pessoaAtiva={contaAtiva}
+          verTudoHref={`/lancamentos?ano=${mesReferencia.year}&mes=${mesReferencia.month}`}
+        />
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Contas fixas</h2>
+          <p className="type-caption text-ink-3">cobranças dos contratos em {labelMes(mesReferencia)}, da mais próxima</p>
+        </div>
+        <UltimasSaidas
+          saidas={fixasFeed}
+          resumos={{}}
+          categorias={todasCategorias}
+          contaPorId={contaPorId}
+          cartaoPorId={cartaoPorId}
+          mesReferencia={mesReferencia}
+          hoje={referencia}
+          pessoaAtiva={contaAtiva}
+          verTudoHref={`/contas-fixas?ano=${mesReferencia.year}&mes=${mesReferencia.month}`}
+          rotulo={{ singular: "conta fixa", plural: "contas fixas", evento: "cobrança" }}
+          vazio="Nenhuma conta fixa com cobrança neste mês. Cadastre em Contas fixas."
+          ordenacaoInicial={{ campo: "data", direcao: "asc" }}
         />
       </section>
     </main>

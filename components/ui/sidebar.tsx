@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Settings, Tags } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Repeat, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AccountSwitcher } from "@/components/account-switcher";
@@ -19,6 +19,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: Receipt },
+  { href: "/contas-fixas", label: "Contas fixas", icon: Repeat },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/categorias", label: "Categorias", icon: Tags },
   { href: "/contas", label: "Conta Bancária", icon: Landmark },

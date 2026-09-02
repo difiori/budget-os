@@ -1,4 +1,4 @@
-import { type CalendarDate, isSameMonth, parseCalendarDate } from "./calendar-date";
+import { type CalendarDate, formatCalendarDateISO, isSameMonth, parseCalendarDate } from "./calendar-date";
 import type { Conta, EntradaStatus, MetodoPagamento, SaidaParaCalculo, SaidaStatus } from "./types";
 
 interface EntradaParaCalculo {
@@ -95,9 +95,42 @@ export function resolverContaEfetivaDaSaida(
 }
 
 /**
- * Resumo de uma conta no mês: gastos, entradas e saldo previsto (regra 4),
- * já resolvendo compras no crédito pela conta vinculada ao cartão. Ponto
- * único de cálculo — não duplicar esta lógica em cada página.
+ * Saldo da conta no INÍCIO do mês, reconstruído a partir do saldo real de
+ * hoje. O app não guarda extrato de saldo, só o saldo atual e o status de
+ * cada lançamento; então: desfaz o que já liquidou de `início(M)` em diante
+ * (entradas recebidas com data ≥ início, saídas pagas com vencimento ≥
+ * início) e antecipa o que ainda vai liquidar antes de M (entradas a receber
+ * com data < início, saídas a pagar com vencimento < início). Vale para o
+ * mês corrente, passado ou futuro. Transferências entre contas e ajustes
+ * manuais de saldo não são desfeitos — é uma aproximação declarada.
+ */
+export function saldoInicioMesCents(
+  conta: Pick<Conta, "id" | "saldo_atual_cents">,
+  saidas: (SaidaParaCalculo & { status: SaidaStatus })[],
+  entradas: (EntradaParaCalculo & { status: EntradaStatus })[],
+  mesReferencia: CalendarDate
+): number {
+  const inicio = formatCalendarDateISO({ ...mesReferencia, day: 1 });
+  let saldo = conta.saldo_atual_cents;
+  for (const e of entradas) {
+    if (e.conta_destino_id !== conta.id) continue;
+    const recebida = e.status === "Recebido";
+    if (recebida && e.data >= inicio) saldo -= e.quantia_cents;
+    if (!recebida && e.data < inicio) saldo += e.quantia_cents;
+  }
+  for (const s of saidas) {
+    if (s.conta_id !== conta.id || s.vencimento === null) continue;
+    const paga = s.status === "Pago";
+    if (paga && s.vencimento >= inicio) saldo += s.total_cents;
+    if (!paga && s.vencimento < inicio) saldo -= s.total_cents;
+  }
+  return saldo;
+}
+
+/**
+ * Resumo de uma conta no mês: gastos, entradas, saldo inicial e saldo
+ * previsto (regra 4), já resolvendo compras no crédito pela conta vinculada
+ * ao cartão. Ponto único de cálculo — não duplicar esta lógica em cada página.
  */
 export function resumoContaMes(
   conta: Pick<Conta, "id" | "saldo_atual_cents">,
@@ -105,7 +138,14 @@ export function resumoContaMes(
   entradas: (EntradaParaCalculo & { status: EntradaStatus })[],
   mesReferencia: CalendarDate,
   contaVinculadaPorCartaoId: Map<string, string | null>
-): { gastos: number; entradasConta: number; aPagar: number; aReceber: number; saldoPrevisto: number } {
+): {
+  gastos: number;
+  entradasConta: number;
+  aPagar: number;
+  aReceber: number;
+  saldoInicio: number;
+  saldoPrevisto: number;
+} {
   const saidasComContaEfetiva = saidas.map((s) => ({
     ...s,
     conta_id: resolverContaEfetivaDaSaida(s, contaVinculadaPorCartaoId),
@@ -121,8 +161,22 @@ export function resumoContaMes(
     entradasConta,
     aPagar,
     aReceber,
+    saldoInicio: saldoInicioMesCents(conta, saidasComContaEfetiva, entradas, mesReferencia),
     saldoPrevisto: saldoPrevistoCents(conta.saldo_atual_cents, aReceber, aPagar),
   };
+}
+
+/**
+ * Uso do disponível no mês: fração do que havia para gastar (saldo no início
+ * do mês + entradas do mês) já comprometida com saídas do mês. Só renda do
+ * mês como base ignorava o que sobrou do mês anterior — uma entrada grande
+ * em agosto sumia da leitura de setembro. `null` = não há disponível
+ * positivo (estado declarado, nunca um percentual inventado).
+ */
+export function usoDoDisponivelPct(saidasMes: number, saldoInicio: number, entradasMes: number): number | null {
+  const disponivel = saldoInicio + entradasMes;
+  if (disponivel <= 0) return null;
+  return (saidasMes / disponivel) * 100;
 }
 
 /**
