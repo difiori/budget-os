@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Repeat, Settings, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -29,7 +29,13 @@ const ITEMS: NavItem[] = [
 
 export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
+  const params = useSearchParams();
   const { abrir } = useLancar();
+  // O mês em foco acompanha a navegação: se a URL atual tem ano/mês, os links
+  // do menu levam para o mesmo mês (Configurações não tem recorte mensal).
+  const ano = params.get("ano");
+  const mes = params.get("mes");
+  const comMes = (href: string) => (ano && mes && href !== "/config" ? `${href}?ano=${ano}&mes=${mes}` : href);
 
   return (
     <aside className="glass sticky top-0 hidden h-screen w-60 shrink-0 flex-col px-4 py-7 md:flex">
@@ -55,7 +61,7 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={comMes(item.href)}
               aria-current={active ? "page" : undefined}
               className={`flex items-center gap-3 rounded-sm px-3 py-2.5 transition-colors ${
                 active

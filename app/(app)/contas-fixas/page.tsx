@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
-import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
+import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { labelMes } from "@/lib/format/meses";
 import { ContasFixasView } from "./contas-fixas-view";
 import type { Cartao, Categoria, Conta, ContaFixa, Saida } from "@/lib/domain/types";
@@ -52,7 +52,7 @@ export default async function ContasFixasPage({
         .lt("data", fimMes),
       supabase.from("categoria").select("id, nome, dono").order("nome"),
       supabase.from("conta").select("id, nome, dono").order("nome"),
-      supabase.from("cartao").select("id, nome, dono").order("nome"),
+      supabase.from("cartao").select("id, nome, dono, dia_vencimento").order("nome"),
     ]);
 
   return (
@@ -62,6 +62,7 @@ export default async function ContasFixasPage({
           label={labelMes(mesReferencia)}
           hrefAnterior={monthHref(mesAnterior)}
           hrefSeguinte={monthHref(mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : monthHref(referencia)}
         />
       </PageHeader>
 
@@ -71,7 +72,7 @@ export default async function ContasFixasPage({
         ocorrenciasIniciais={(ocorrencias ?? []) as Saida[]}
         categorias={(categorias ?? []) as Categoria[]}
         contas={(contas ?? []) as Pick<Conta, "id" | "nome" | "dono">[]}
-        cartoes={(cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono">[]}
+        cartoes={(cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_vencimento">[]}
         pessoaAtiva={ativa}
         mesReferencia={mesReferencia}
         hoje={referencia}

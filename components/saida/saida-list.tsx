@@ -6,6 +6,7 @@ import { Amount } from "@/components/ui/amount";
 import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
+import { FixaTag } from "@/components/ui/fixa-tag";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
@@ -183,7 +184,10 @@ function SaidaRow({
   return (
     <div className="flex items-baseline justify-between gap-3 py-2">
       <div className="min-w-0">
-        <p className="truncate text-[0.875rem] text-ink">{nomeComParcela(saida.nome, saida.parcela)}</p>
+        <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+          <span className="truncate">{nomeComParcela(saida.nome, saida.parcela)}</span>
+          {saida.recorrente_id && <FixaTag />}
+        </p>
         <p className="type-caption text-ink-3">
           {categoriaNome} · {formatDataCurta(saida.data)}
           {origemLabel ? ` · ${origemLabel}` : ""}

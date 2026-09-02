@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Amount } from "@/components/ui/amount";
 import { Combobox } from "@/components/ui/combobox";
 import { PersonDot } from "@/components/ui/person-tag";
+import { FixaTag } from "@/components/ui/fixa-tag";
 import { inputClasses } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -118,6 +119,7 @@ function CabecalhoOrdenavel({
 function CartaoColapsado({
   pessoa,
   titulo,
+  badge,
   subtitulo,
   valorCents,
   valorClassName,
@@ -128,6 +130,7 @@ function CartaoColapsado({
 }: {
   pessoa: Saida["pessoa"];
   titulo: string;
+  badge?: React.ReactNode;
   subtitulo: string;
   valorCents: number;
   valorClassName: string;
@@ -142,7 +145,10 @@ function CartaoColapsado({
         <div className="flex min-w-0 items-start gap-2.5">
           <PersonDot pessoa={pessoa} className="mt-2" />
           <div className="min-w-0">
-            <p className="truncate text-[0.875rem] text-ink">{titulo}</p>
+            <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+              <span className="truncate">{titulo}</span>
+              {badge}
+            </p>
             <p className="type-caption text-ink-3">{subtitulo}</p>
           </div>
         </div>
@@ -397,7 +403,10 @@ function SaidaRow({
     <>
       <LinhaBase>
         <PersonDot pessoa={saida.pessoa} />
-        <span className="truncate text-[0.875rem] text-ink">{nomeComParcela(saida.nome, saida.parcela)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+          <span className="truncate">{nomeComParcela(saida.nome, saida.parcela)}</span>
+          {saida.recorrente_id && <FixaTag />}
+        </span>
         <span className="type-caption truncate text-ink-2">{categoriaNome}</span>
         <span className="type-caption truncate text-ink-2">{saida.metodo}</span>
         <span className="type-caption truncate text-ink-2">{destinoNome}</span>
@@ -430,6 +439,7 @@ function SaidaRow({
       <CartaoColapsado
         pessoa={saida.pessoa}
         titulo={nomeComParcela(saida.nome, saida.parcela)}
+        badge={saida.recorrente_id ? <FixaTag /> : undefined}
         subtitulo={`${categoriaNome} · ${saida.metodo} · ${destinoNome} · reg. ${formatDataCurta(saida.created_at)}${
           saida.vencimento ? ` · venc. ${formatDataCurta(saida.vencimento)}` : ""
         }`}
@@ -908,6 +918,7 @@ export function LancamentosList({
       metodo: s.metodo,
       contaCartaoIds: [(s.metodo === "Débito" ? s.conta_id : s.cartao_id) ?? ""].filter(Boolean),
       origem: s.origem,
+      fixa: !!s.recorrente_id,
       statusGrupo: s.status === "Pago" ? "Pago" : "A pagar",
       vencimentoSort: s.vencimento ?? s.data ?? s.created_at,
       registroSort: s.created_at,
@@ -940,6 +951,7 @@ export function LancamentosList({
       metodo: null,
       contaCartaoIds: [e.conta_destino_id],
       origem: e.origem ?? "Manual",
+      fixa: false,
       statusGrupo: e.status === "Recebido" ? "Recebido" : "A receber",
       vencimentoSort: e.data,
       registroSort: e.created_at,
@@ -971,6 +983,7 @@ export function LancamentosList({
       metodo: null,
       contaCartaoIds: [t.de_conta_id, t.para_conta_id],
       origem: null,
+      fixa: false,
       statusGrupo: null,
       vencimentoSort: t.data ?? t.created_at,
       registroSort: t.created_at,

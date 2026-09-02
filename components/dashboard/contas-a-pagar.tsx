@@ -5,6 +5,7 @@ import { CreditCard } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonDot } from "@/components/ui/person-tag";
+import { FixaTag } from "@/components/ui/fixa-tag";
 import { useToast } from "@/components/ui/toast";
 import { alternarStatusSaida, marcarSaidasComoPagas } from "@/app/(app)/lancamentos/actions";
 import { formatCentsToBRL } from "@/lib/domain/money";
@@ -112,9 +113,7 @@ export function ContasAPagar({
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
                   <span className="truncate">{nomeComParcela(s.nome, s.parcela)}</span>
-                  {fixas.has(s.id) && (
-                    <span className="type-caption shrink-0 rounded-xs bg-track px-1 text-ink-3">fixa</span>
-                  )}
+                  {fixas.has(s.id) && <FixaTag />}
                 </p>
                 <p className="type-caption truncate text-ink-3">
                   {formatVenc(s.vencimento)} · {destinoPorId[s.id] ?? "—"}

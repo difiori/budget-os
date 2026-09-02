@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type ComponentType } from "react";
 import {
   CalendarRange,
@@ -42,11 +42,11 @@ const MAIS: Item[] = [
   { href: "/config", label: "Configurações", icon: Settings },
 ];
 
-function TabLink({ item, active }: { item: Item; active: boolean }) {
+function TabLink({ item, active, href }: { item: Item; active: boolean; href: string }) {
   const Icon = item.icon;
   return (
     <Link
-      href={item.href}
+      href={href}
       aria-current={active ? "page" : undefined}
       className={`flex flex-col items-center gap-1 pb-2 pt-2.5 transition-colors ${active ? "text-ink" : "text-ink-3"}`}
     >
@@ -59,7 +59,11 @@ function TabLink({ item, active }: { item: Item; active: boolean }) {
 /** Barra fixa inferior (só mobile): 4 abas + ＋ central (Lançar) + "Mais". */
 export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
+  const params = useSearchParams();
   const { abrir } = useLancar();
+  const ano = params.get("ano");
+  const mes = params.get("mes");
+  const comMes = (href: string) => (ano && mes && href !== "/config" ? `${href}?ano=${ano}&mes=${mes}` : href);
   const [maisAberto, setMaisAberto] = useState(false);
   const maisAtivo = MAIS.some((m) => m.href === pathname);
 
@@ -92,7 +96,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
               return (
                 <Link
                   key={m.href}
-                  href={m.href}
+                  href={comMes(m.href)}
                   onClick={() => setMaisAberto(false)}
                   className={`flex items-center gap-3 rounded-sm px-3 py-2.5 transition-colors ${
                     active ? "bg-brand-tint font-semibold text-on-brand-tint" : "text-ink-2 hover:bg-bg hover:text-ink"
@@ -125,7 +129,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {ESQUERDA.map((item) => (
-          <TabLink key={item.href} item={item} active={pathname === item.href} />
+          <TabLink key={item.href} item={item} active={pathname === item.href} href={comMes(item.href)} />
         ))}
 
         {/* ＋ Lançar — ação central, em destaque */}
@@ -141,7 +145,7 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
         </div>
 
         {DIREITA.map((item) => (
-          <TabLink key={item.href} item={item} active={pathname === item.href} />
+          <TabLink key={item.href} item={item} active={pathname === item.href} href={comMes(item.href)} />
         ))}
 
         <button

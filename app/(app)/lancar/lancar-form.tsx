@@ -1,12 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { criarLancamento, type CriarLancamentoState } from "./actions";
+import { criarLancamento, type CriarLancamentoState, type Sugestoes } from "./actions";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { addMonths, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
+import { useClickFora } from "@/components/ui/use-click-fora";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { MESES_ABREV } from "@/lib/format/meses";
@@ -66,9 +67,110 @@ interface LancarFormProps {
   cartoes: Cartao[];
   categorias: Categoria[];
   pessoaAtiva: Pessoa;
+  /** Histórico para o autocompletar do nome (null enquanto carrega). */
+  sugestoes?: Sugestoes | null;
 }
 
-export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarFormProps) {
+interface SugestaoVisivel {
+  chave: string;
+  nome: string;
+  detalhe: string;
+  aplicar: () => void;
+}
+
+/**
+ * Nome com autocompletar: digitou "ama", aparece "Amazon · Gastos Diversos ·
+ * Crédito · C6 Business · último R$ 54,00". Escolher preenche categoria,
+ * método e conta/cartão do último lançamento igual — um toque em vez de
+ * cinco campos. Setas navegam, Enter escolhe, Esc fecha.
+ */
+function NomeComSugestoes({
+  value,
+  onChange,
+  sugestoes,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  sugestoes: SugestaoVisivel[];
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [indice, setIndice] = useState(0);
+  const ref = useClickFora<HTMLDivElement>(aberto, () => setAberto(false));
+  const mostrar = aberto && sugestoes.length > 0;
+
+  function escolher(i: number) {
+    const s = sugestoes[i];
+    if (!s) return;
+    s.aplicar();
+    setAberto(false);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        id="nome"
+        name="nome"
+        type="text"
+        placeholder="Nome do lançamento"
+        required
+        autoComplete="off"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setAberto(true);
+          setIndice(0);
+        }}
+        onFocus={() => setAberto(true)}
+        onKeyDown={(e) => {
+          if (!mostrar) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setIndice((i) => Math.min(i + 1, sugestoes.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setIndice((i) => Math.max(i - 1, 0));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            escolher(indice);
+          } else if (e.key === "Escape") {
+            setAberto(false);
+          }
+        }}
+        aria-autocomplete="list"
+        aria-controls="nome-sugestoes"
+        aria-expanded={mostrar}
+        role="combobox"
+        className="type-headline w-full border-none bg-transparent text-ink outline-none placeholder:text-ink-3/50 focus-visible:outline-none"
+      />
+      {mostrar && (
+        <ul
+          id="nome-sugestoes"
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-sm border border-hairline bg-raised py-1 shadow-raised"
+        >
+          {sugestoes.map((s, i) => (
+            <li key={s.chave} role="option" aria-selected={i === indice}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => escolher(i)}
+                onMouseEnter={() => setIndice(i)}
+                className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors ${
+                  i === indice ? "bg-brand-tint" : "hover:bg-bg"
+                }`}
+              >
+                <span className="type-body text-ink">{s.nome}</span>
+                <span className="type-caption text-ink-3">{s.detalhe}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function LancarForm({ contas, cartoes, categorias, pessoaAtiva, sugestoes = null }: LancarFormProps) {
   const [state, formAction, isPending] = useActionState(criarLancamento, initialState);
 
   const [tipo, setTipo] = useState<Tipo>("Saida");
@@ -83,6 +185,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
   const [numeroParcelas, setNumeroParcelas] = useState("2");
   const [recorrente, setRecorrente] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const [nomeInput, setNomeInput] = useState("");
   const [valorInput, setValorInput] = useState("");
   const [dataInput, setDataInput] = useState(hojeISO());
 
@@ -128,6 +231,53 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
 
   const permiteRecorrente =
     tipo === "Entrada" || (tipo === "Saida" && !(modo === "Credito" && formato === "Parcelado"));
+
+  // Sugestões de nome: só da pessoa ativa; começa-com primeiro, depois
+  // contém; mais usadas antes. Escolher preenche o resto do formulário.
+  const sugestoesVisiveis: SugestaoVisivel[] = useMemo(() => {
+    const q = nomeInput.trim().toLowerCase();
+    if (!sugestoes || q.length < 1 || tipo === "Transferencia") return [];
+    const rank = <T extends { nome: string; vezes: number }>(lista: T[]) =>
+      lista
+        .filter((x) => x.nome.toLowerCase().includes(q))
+        .sort((a, b) => {
+          const pa = a.nome.toLowerCase().startsWith(q) ? 0 : 1;
+          const pb = b.nome.toLowerCase().startsWith(q) ? 0 : 1;
+          return pa - pb || b.vezes - a.vezes || a.nome.localeCompare(b.nome, "pt-BR");
+        })
+        .slice(0, 6);
+    const nomeCat = (id: string | null) => categorias.find((c) => c.id === id)?.nome ?? "Sem categoria";
+    if (tipo === "Entrada") {
+      return rank(sugestoes.entradas.filter((e) => e.pessoa === pessoaAtiva)).map((e) => ({
+        chave: `e|${e.nome}`,
+        nome: e.nome,
+        detalhe: `${contas.find((c) => c.id === e.conta_destino_id)?.nome ?? "Conta"} · último ${formatCentsToBRL(e.quantia_cents)} · ${e.vezes}x`,
+        aplicar: () => {
+          setNomeInput(e.nome);
+          if (contasDaPessoa.some((c) => c.id === e.conta_destino_id)) setDestinoId(e.conta_destino_id);
+        },
+      }));
+    }
+    return rank(sugestoes.saidas.filter((x) => x.pessoa === pessoaAtiva)).map((x) => {
+      const novoModo: Modo = x.metodo === "Crédito" ? "Credito" : "Debito";
+      const destino = novoModo === "Credito" ? x.cartao_id : x.conta_id;
+      const destinoNome =
+        (novoModo === "Credito" ? cartoes : contas).find((d) => d.id === destino)?.nome ?? (novoModo === "Credito" ? "Cartão" : "Conta");
+      return {
+        chave: `s|${x.nome}|${x.metodo}|${destino ?? ""}`,
+        nome: x.nome,
+        detalhe: `${nomeCat(x.categoria_id)} · ${x.metodo} · ${destinoNome} · último ${formatCentsToBRL(x.total_cents)} · ${x.vezes}x`,
+        aplicar: () => {
+          setNomeInput(x.nome);
+          if (modo !== novoModo) handleModoChange(novoModo);
+          const opcoes = novoModo === "Credito" ? cartoesDaPessoa : contasDaPessoa;
+          if (destino && opcoes.some((o) => o.id === destino)) setDestinoId(destino);
+          if (x.categoria_id && categorias.some((c) => c.id === x.categoria_id)) setCategoriaId(x.categoria_id);
+        },
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nomeInput, sugestoes, tipo, pessoaAtiva, categorias, contas, cartoes, modo]);
 
   const previewParcelamento = useMemo(() => {
     if (!(tipo === "Saida" && modo === "Credito" && formato === "Parcelado")) return null;
@@ -188,6 +338,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
     if (state.status === "success") {
       setCategoriaId("");
       setRecorrente(false);
+      setNomeInput("");
       setFormKey((key) => key + 1);
     }
   }
@@ -264,15 +415,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva }: LancarF
         <label htmlFor="nome" className="type-eyebrow text-ink-3">
           Nome
         </label>
-        <input
-          id="nome"
-          name="nome"
-          type="text"
-          placeholder="Nome do lançamento"
-          required
-          defaultValue=""
-          className="type-headline w-full border-none bg-transparent text-ink outline-none placeholder:text-ink-3/50 focus-visible:outline-none"
-        />
+        <NomeComSugestoes value={nomeInput} onChange={setNomeInput} sugestoes={sugestoesVisiveis} />
         <label htmlFor="valor" className="type-eyebrow mt-3 block border-t border-hairline pt-3.5 text-ink-3">
           Valor
         </label>

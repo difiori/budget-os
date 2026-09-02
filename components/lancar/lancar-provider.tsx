@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { LancarForm } from "@/app/(app)/lancar/lancar-form";
+import { carregarSugestoes, type Sugestoes } from "@/app/(app)/lancar/actions";
 import type { Cartao, Categoria, Conta, Pessoa } from "@/lib/domain/types";
 
 interface LancarCtx {
@@ -42,7 +43,25 @@ export function LancarProvider({
   children: ReactNode;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [sugestoes, setSugestoes] = useState<Sugestoes | null>(null);
   const router = useRouter();
+
+  // Histórico para o autocompletar: busca uma vez, na primeira abertura, e
+  // reaproveita enquanto a página viver.
+  useEffect(() => {
+    if (!aberto || sugestoes) return;
+    let cancelado = false;
+    carregarSugestoes()
+      .then((s) => {
+        if (!cancelado) setSugestoes(s);
+      })
+      .catch(() => {
+        /* sem sugestões o formulário continua funcionando */
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [aberto, sugestoes]);
 
   function fechar() {
     setAberto(false);
@@ -76,7 +95,7 @@ export function LancarProvider({
               className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
-              <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} />
+              <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} sugestoes={sugestoes} />
             </div>
           </div>
         </div>

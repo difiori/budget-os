@@ -4,7 +4,7 @@ import { MonthSelector } from "@/components/ui/month-selector";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
-import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
+import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { labelMes } from "@/lib/format/meses";
 import { LancamentosList } from "./lancamentos-list";
 import type { Cartao, Categoria, Conta, Entrada, Saida, Transferencia } from "@/lib/domain/types";
@@ -98,6 +98,7 @@ export default async function LancamentosPage({
           label={labelMes(mesReferencia)}
           hrefAnterior={monthHref(mesAnterior)}
           hrefSeguinte={monthHref(mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : monthHref(referencia)}
         />
       </PageHeader>
 

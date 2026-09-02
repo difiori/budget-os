@@ -10,6 +10,7 @@ export type TipoLanc = "Saida" | "Entrada" | "Transferencia";
 export type StatusGrupo = "A pagar" | "Pago" | "A receber" | "Recebido";
 export type Metodo = "Débito" | "Crédito";
 export type CampoOrdenacao = "registro" | "vencimento" | "valor" | "nome" | "categoria";
+export type FiltroFixas = "todas" | "fixas" | "avulsas";
 export interface Ordenacao {
   campo: CampoOrdenacao;
   direcao: "asc" | "desc";
@@ -24,6 +25,8 @@ export interface Filtros {
   categorias: string[];
   contasCartoes: string[];
   origens: string[];
+  /** Contas fixas (ocorrências de contrato) x avulsas. */
+  fixas: FiltroFixas;
 }
 
 export interface ItemDescriptor {
@@ -36,6 +39,8 @@ export interface ItemDescriptor {
   metodo: Metodo | null;
   contaCartaoIds: string[];
   origem: string | null;
+  /** Saída gerada por um contrato de conta fixa. */
+  fixa: boolean;
   statusGrupo: StatusGrupo | null;
   /** Data em que o lançamento "acontece" (vencimento da saída, data da entrada
    * ou transferência). Nem toda saída tem vencimento — daí o fallback. */
@@ -47,7 +52,7 @@ export interface ItemDescriptor {
 }
 
 export function filtrosPadrao(pessoa: Pessoa): Filtros {
-  return { busca: "", pessoa, tipos: [], metodos: [], status: [], categorias: [], contasCartoes: [], origens: [] };
+  return { busca: "", pessoa, tipos: [], metodos: [], status: [], categorias: [], contasCartoes: [], origens: [], fixas: "todas" };
 }
 
 /** Facetas que estreitam a lista (a busca e a pessoa ficam fora do contador). */
@@ -58,7 +63,8 @@ export function contarFiltros(f: Filtros): number {
     (f.status.length ? 1 : 0) +
     (f.categorias.length ? 1 : 0) +
     (f.contasCartoes.length ? 1 : 0) +
-    (f.origens.length ? 1 : 0)
+    (f.origens.length ? 1 : 0) +
+    (f.fixas !== "todas" ? 1 : 0)
   );
 }
 
@@ -70,6 +76,8 @@ export function passaFiltro(d: ItemDescriptor, f: Filtros): boolean {
   if (f.categorias.length && (d.categoriaId === null || !f.categorias.includes(d.categoriaId))) return false;
   if (f.contasCartoes.length && !d.contaCartaoIds.some((id) => f.contasCartoes.includes(id))) return false;
   if (f.origens.length && (d.origem === null || !f.origens.includes(d.origem))) return false;
+  if (f.fixas === "fixas" && !d.fixa) return false;
+  if (f.fixas === "avulsas" && d.fixa) return false;
   if (f.busca.trim()) {
     const q = f.busca.trim().toLowerCase();
     if (!d.nome.toLowerCase().includes(q) && !d.categoriaNome.toLowerCase().includes(q)) return false;
@@ -298,6 +306,13 @@ export function FiltrosBar({
   filtros.origens.forEach((o) =>
     chips.push({ id: `or-${o}`, label: o, remover: () => onChange({ ...filtros, origens: filtros.origens.filter((x) => x !== o) }) })
   );
+  if (filtros.fixas !== "todas") {
+    chips.push({
+      id: "fixas",
+      label: filtros.fixas === "fixas" ? "Só contas fixas" : "Sem contas fixas",
+      remover: () => onChange({ ...filtros, fixas: "todas" }),
+    });
+  }
 
   return (
     <div className="mb-4 flex flex-col gap-3">
@@ -362,6 +377,17 @@ export function FiltrosBar({
                   onToggle={(v) => onChange({ ...filtros, status: toggle(filtros.status, v) })}
                 />
               </SecaoPainel>
+              <SecaoPainel titulo="Contas fixas">
+                <Segmento
+                  valor={filtros.fixas}
+                  opcoes={[
+                    { value: "todas" as FiltroFixas, label: "Todas" },
+                    { value: "fixas" as FiltroFixas, label: "Só fixas" },
+                    { value: "avulsas" as FiltroFixas, label: "Sem fixas" },
+                  ]}
+                  onChange={(v) => onChange({ ...filtros, fixas: v })}
+                />
+              </SecaoPainel>
               <SecaoPainel titulo="Origem">
                 <ChipsMulti
                   selecionados={filtros.origens}
@@ -389,7 +415,7 @@ export function FiltrosBar({
                 <button
                   type="button"
                   onClick={() =>
-                    onChange({ ...filtros, tipos: [], metodos: [], status: [], categorias: [], contasCartoes: [], origens: [] })
+                    onChange({ ...filtros, tipos: [], metodos: [], status: [], categorias: [], contasCartoes: [], origens: [], fixas: "todas" })
                   }
                   className="type-label self-start text-ink-2 underline underline-offset-2 hover:text-ink"
                 >

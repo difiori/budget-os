@@ -6,6 +6,7 @@ import { formatCalendarDateISO, parseCalendarDate } from "@/lib/domain/calendar-
 import { parseCentsFromBRL } from "@/lib/domain/money";
 import { gerarParcelas } from "@/lib/domain/parcelamento";
 import { gerarEntradasRecorrentes } from "@/lib/domain/recorrencia";
+import { nomeSemParcela } from "@/lib/domain/parcelamento";
 import { mesISO } from "@/lib/domain/conta-fixa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import type { EntradaStatus, FormatoCompra, MetodoPagamento, Pessoa, SaidaStatus } from "@/lib/domain/types";
@@ -355,4 +356,92 @@ async function criarTransferencia(formData: FormData): Promise<CriarLancamentoSt
   }
 
   return { status: "success" };
+}
+
+
+/* ------------------------------------------------------------------------ */
+/* Sugestões para o autocompletar do Lançar                                  */
+/* ------------------------------------------------------------------------ */
+
+export interface SugestaoSaida {
+  nome: string;
+  pessoa: Pessoa;
+  categoria_id: string | null;
+  metodo: MetodoPagamento;
+  conta_id: string | null;
+  cartao_id: string | null;
+  /** Valor do lançamento mais recente com esse nome. */
+  total_cents: number;
+  vezes: number;
+}
+
+export interface SugestaoEntrada {
+  nome: string;
+  pessoa: Pessoa;
+  conta_destino_id: string;
+  quantia_cents: number;
+  vezes: number;
+}
+
+export interface Sugestoes {
+  saidas: SugestaoSaida[];
+  entradas: SugestaoEntrada[];
+}
+
+/**
+ * Nomes já usados, um por (pessoa, nome), com categoria/método/destino do
+ * lançamento mais recente e quantas vezes apareceu. Carregado uma vez quando
+ * o overlay de Lançar abre. Ocorrências de conta fixa e parcelas ficam de
+ * fora (têm fluxo próprio) — a parcela entra pelo nome base.
+ */
+export async function carregarSugestoes(): Promise<Sugestoes> {
+  const supabase = await createClient();
+  const [{ data: saidas }, { data: entradas }] = await Promise.all([
+    supabase
+      .from("saida")
+      .select("nome, pessoa, categoria_id, metodo, conta_id, cartao_id, total_cents, parcela, recorrente_id")
+      .order("created_at", { ascending: false })
+      .limit(800),
+    supabase
+      .from("entrada")
+      .select("nome, pessoa, conta_destino_id, quantia_cents")
+      .order("created_at", { ascending: false })
+      .limit(300),
+  ]);
+
+  const chave = (pessoa: string, nome: string) => `${pessoa}|${nome.trim().toLowerCase().replace(/\s+/g, " ")}`;
+
+  const porSaida = new Map<string, SugestaoSaida>();
+  for (const s of (saidas ?? []) as (SugestaoSaida & { parcela: string | null; recorrente_id: string | null })[]) {
+    if (s.recorrente_id) continue;
+    if (s.metodo !== "Débito" && s.metodo !== "Crédito") continue;
+    const nome = nomeSemParcela(s.nome, s.parcela).trim();
+    if (!nome) continue;
+    const k = chave(s.pessoa, nome);
+    const atual = porSaida.get(k);
+    if (atual) atual.vezes += 1;
+    else
+      porSaida.set(k, {
+        nome,
+        pessoa: s.pessoa,
+        categoria_id: s.categoria_id,
+        metodo: s.metodo,
+        conta_id: s.conta_id,
+        cartao_id: s.cartao_id,
+        total_cents: s.total_cents,
+        vezes: 1,
+      });
+  }
+
+  const porEntrada = new Map<string, SugestaoEntrada>();
+  for (const e of (entradas ?? []) as SugestaoEntrada[]) {
+    const nome = e.nome.trim();
+    if (!nome) continue;
+    const k = chave(e.pessoa, nome);
+    const atual = porEntrada.get(k);
+    if (atual) atual.vezes += 1;
+    else porEntrada.set(k, { nome, pessoa: e.pessoa, conta_destino_id: e.conta_destino_id, quantia_cents: e.quantia_cents, vezes: 1 });
+  }
+
+  return { saidas: [...porSaida.values()], entradas: [...porEntrada.values()] };
 }

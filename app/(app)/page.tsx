@@ -13,7 +13,7 @@ import { SaidasPorCategoria } from "@/components/dashboard/saidas-por-categoria"
 import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
-import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
+import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
@@ -265,11 +265,14 @@ export default async function DashboardPage({
           label={labelMes(mesReferencia)}
           hrefAnterior={painelHref(mesAnterior)}
           hrefSeguinte={painelHref(mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : painelHref(referencia)}
         />
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card variant="glass" className="flex flex-col gap-5 p-6 lg:col-span-2">
+      {/* Saldo e Contas a pagar dividem a linha meio a meio: a lista de contas
+          precisa de largura para nome, vencimento, valor e tag na mesma linha. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card variant="glass" className="flex flex-col gap-5 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="type-eyebrow text-ink-3">Saldo atual</p>

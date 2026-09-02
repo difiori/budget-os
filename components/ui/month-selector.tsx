@@ -7,10 +7,13 @@ export function MonthSelector({
   label,
   hrefAnterior,
   hrefSeguinte,
+  hrefHoje,
 }: {
   label: string;
   hrefAnterior: string;
   hrefSeguinte: string;
+  /** Volta ao mês corrente; só passar quando o mês em foco não é o atual. */
+  hrefHoje?: string;
 }) {
   return (
     <div className="flex items-center rounded-sm border border-hairline-strong bg-surface">
@@ -29,6 +32,14 @@ export function MonthSelector({
       >
         <ChevronRight size={16} />
       </Link>
+      {hrefHoje && (
+        <Link
+          href={hrefHoje}
+          className="type-caption flex h-9 items-center border-l border-hairline px-2.5 text-ink-2 transition-colors hover:text-ink"
+        >
+          hoje
+        </Link>
+      )}
     </div>
   );
 }

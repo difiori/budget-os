@@ -19,6 +19,19 @@ interface FaturaView {
   vencimentoLabel: string;
   totalCents: number;
   compras: Saida[];
+  /** Quantas compras vêm de contas fixas (assinaturas) e quanto somam. */
+  fixasCount: number;
+  fixasCents: number;
+}
+
+function ResumoFixas({ fatura }: { fatura: FaturaView }) {
+  if (fatura.fixasCount === 0) return null;
+  return (
+    <p className="type-caption mt-1 text-ink-3">
+      inclui {fatura.fixasCount} {fatura.fixasCount === 1 ? "conta fixa" : "contas fixas"} ·{" "}
+      <span className="figures">{formatCentsToBRL(fatura.fixasCents)}</span>
+    </p>
+  );
 }
 
 interface FaturaAVencer extends FaturaView {
@@ -140,6 +153,7 @@ function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Catego
           <Amount cents={aVencer.totalCents} semantic="none" className="type-title text-ink" />
         </div>
 
+        <ResumoFixas fatura={aVencer} />
         {aVencer.compras.length === 0 ? (
           <p className="type-caption mt-2 text-ink-3">Sem fatura a vencer.</p>
         ) : aVencerPaga ? (
@@ -223,6 +237,7 @@ function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Catego
           </div>
         )}
         {doMes.compras.length === 0 && <p className="type-caption mt-1 text-ink-3">Nenhuma compra ainda neste mês.</p>}
+        <ResumoFixas fatura={doMes} />
       </div>
     </Card>
   );

@@ -26,7 +26,7 @@ import { nomeComParcela } from "@/lib/domain/parcelamento";
 import { labelMes, MESES_ABREV } from "@/lib/format/meses";
 import type { Categoria, Pessoa, Saida } from "@/lib/domain/types";
 
-type Filtro = "Geral" | Pessoa;
+type Filtro = "Casal" | Pessoa;
 
 const PAGINA = 12;
 
@@ -171,7 +171,7 @@ export function UltimasSaidas({
   ordenacaoInicial?: OrdenacaoFeed;
 }) {
   const router = useRouter();
-  // Começa no perfil ativo — Geral é uma visão opcional.
+  // Começa no perfil ativo — Casal é uma visão opcional.
   const [filtro, setFiltro] = useState<Filtro>(pessoaAtiva);
   const [ordenacao, setOrdenacao] = useState<OrdenacaoFeed>(ordenacaoInicial);
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
@@ -179,7 +179,7 @@ export function UltimasSaidas({
   const [abertaId, setAbertaId] = useState<string | null>(null);
 
   const outraPessoa: Pessoa = pessoaAtiva === "Diego" ? "Vitor" : "Diego";
-  const FILTROS: Filtro[] = [pessoaAtiva, outraPessoa, "Geral"];
+  const FILTROS: Filtro[] = [pessoaAtiva, outraPessoa, "Casal"];
 
   const categoriaPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c.nome])), [categorias]);
   const nomeCategoria = (id: string | null) => (id && categoriaPorId.get(id)) ?? "Sem categoria";
@@ -190,7 +190,7 @@ export function UltimasSaidas({
   }
 
   const porPessoa = useMemo(
-    () => (filtro === "Geral" ? saidas : saidas.filter((s) => s.pessoa === filtro)),
+    () => (filtro === "Casal" ? saidas : saidas.filter((s) => s.pessoa === filtro)),
     [saidas, filtro]
   );
   const filtradas = useMemo(

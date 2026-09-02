@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
-import { ChipLink } from "@/components/ui/chip-link";
+import { EscopoChips } from "@/components/ui/escopo-chips";
+import { resolverEscopo, type Escopo } from "@/lib/domain/escopo";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
@@ -10,9 +11,8 @@ import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
 import { labelMes, MESES } from "@/lib/format/meses";
 import { CartoesList, type CartaoView } from "./cartoes-list";
-import type { Cartao, Categoria, Pessoa, Saida } from "@/lib/domain/types";
+import type { Cartao, Categoria, Saida } from "@/lib/domain/types";
 
-type Escopo = Pessoa | "Casal";
 
 function cartoesHref(escopo: Escopo, mes: CalendarDate) {
   return `/cartoes?pessoa=${escopo}&ano=${mes.year}&mes=${mes.month}`;
@@ -25,7 +25,7 @@ export default async function CartoesPage({
 }) {
   const params = await searchParams;
   const ativa = await pessoaAtiva();
-  const escopo: Escopo = params.pessoa === "Casal" ? "Casal" : ativa;
+  const escopo = resolverEscopo(params.pessoa, ativa);
 
   const supabase = await createClient();
   const referencia = hoje();
@@ -54,7 +54,7 @@ export default async function CartoesPage({
       supabase
         .from("saida")
         .select(
-          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por"
+          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, editado_por, recorrente_id"
         )
         .not("cartao_id", "is", null)
         .order("id")
@@ -87,6 +87,10 @@ export default async function CartoesPage({
       .sort(ordenarPorData);
 
     const pendentesAVencer = comprasAVencer.filter((s) => s.status !== "Pago");
+    const fixas = (lista: Saida[]) => {
+      const f = lista.filter((s) => s.recorrente_id);
+      return { fixasCount: f.length, fixasCents: f.reduce((sum, s) => sum + s.total_cents, 0) };
+    };
 
     return {
       cartao,
@@ -98,6 +102,7 @@ export default async function CartoesPage({
         vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesReferencia.month)}`,
         totalCents: faturaAtualCents(cartao.id, saidasCartao, mesAnterior),
         compras: comprasAVencer,
+        ...fixas(comprasAVencer),
         temPendente: pendentesAVencer.length > 0,
         totalPendenteCents: pendentesAVencer.reduce((sum, s) => sum + s.total_cents, 0),
         cicloAno: mesAnterior.year,
@@ -108,6 +113,7 @@ export default async function CartoesPage({
         vencimentoLabel: `vence ${dd(cartao.dia_vencimento)}/${dd(mesSeguinte.month)}`,
         totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia),
         compras: comprasDoMes,
+        ...fixas(comprasDoMes),
       },
       categoriaNomePorId,
     };
@@ -120,13 +126,11 @@ export default async function CartoesPage({
           label={labelMes(mesReferencia)}
           hrefAnterior={cartoesHref(escopo, mesAnterior)}
           hrefSeguinte={cartoesHref(escopo, mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : cartoesHref(escopo, referencia)}
         />
       </PageHeader>
 
-      <div className="mb-6 flex flex-wrap gap-1.5">
-        <ChipLink label={ativa} selected={escopo === ativa} href={cartoesHref(ativa, mesReferencia)} />
-        <ChipLink label="Casal" selected={escopo === "Casal"} href={cartoesHref("Casal", mesReferencia)} />
-      </div>
+      <EscopoChips ativa={ativa} escopo={escopo} href={(e) => cartoesHref(e, mesReferencia)} />
 
       {views.length === 0 ? (
         <div className="rounded-md border border-hairline bg-surface p-8 text-center">

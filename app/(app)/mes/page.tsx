@@ -1,23 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
-import { ChipLink } from "@/components/ui/chip-link";
+import { EscopoChips } from "@/components/ui/escopo-chips";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { FixaTag } from "@/components/ui/fixa-tag";
 import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
-import { addMonths, hoje, type CalendarDate } from "@/lib/domain/calendar-date";
-import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
+import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
+import { resolverEscopo, type Escopo } from "@/lib/domain/escopo";
 import { resumoContaMes } from "@/lib/domain/mes";
-import { labelMes } from "@/lib/format/meses";
-import type { Categoria, Conta, Entrada, Pessoa, Saida } from "@/lib/domain/types";
+import {
+  categoriasComparadas,
+  entradasNoMes,
+  fixasVsVariaveis,
+  maioresSaidas,
+  saidasComVencimentoNoMes,
+  taxaPoupancaPct,
+  variacao,
+  type Variacao,
+} from "@/lib/domain/fechamento";
+import { formatCentsToBRL } from "@/lib/domain/money";
+import { labelMes, MESES_ABREV } from "@/lib/format/meses";
+import type { Categoria, Conta, Entrada, Saida } from "@/lib/domain/types";
 
-type PessoaFiltro = Pessoa | "Casal";
-
-function monthHref(pessoa: PessoaFiltro, mes: CalendarDate) {
+function monthHref(pessoa: Escopo, mes: CalendarDate) {
   return `/mes?pessoa=${pessoa}&ano=${mes.year}&mes=${mes.month}`;
+}
+
+/** Variação contra o mês anterior. `subirEhRuim` inverte a cor (saídas). */
+function Delta({ v, subirEhRuim = false, contra }: { v: Variacao; subirEhRuim?: boolean; contra: string }) {
+  if (v.abs === 0) return <p className="type-caption text-ink-3">igual a {contra}</p>;
+  const subiu = v.abs > 0;
+  const bom = subirEhRuim ? !subiu : subiu;
+  const sinal = subiu ? "+" : "−";
+  return (
+    <p className={`type-caption figures ${bom ? "text-pos" : "text-neg"}`}>
+      {sinal}
+      {formatCentsToBRL(Math.abs(v.abs))}
+      {v.pct !== null && ` (${sinal}${Math.round(Math.abs(v.pct))}%)`} vs {contra}
+    </p>
+  );
 }
 
 export default async function MesPage({
@@ -27,10 +52,8 @@ export default async function MesPage({
 }) {
   const params = await searchParams;
   const supabase = await createClient();
-
-  // Escopo padrão = pessoa ativa do menu lateral; "Casal" é a única exceção.
   const ativa = await pessoaAtiva();
-  const pessoa: PessoaFiltro = params.pessoa === "Casal" ? "Casal" : ativa;
+  const pessoa = resolverEscopo(params.pessoa, ativa);
 
   const referencia = hoje();
   const mesReferencia: CalendarDate = {
@@ -40,21 +63,20 @@ export default async function MesPage({
   };
   const mesAnterior = addMonths(mesReferencia, -1);
   const mesSeguinte = addMonths(mesReferencia, 1);
+  const contra = MESES_ABREV[mesAnterior.month - 1];
 
   let contasQuery = supabase.from("conta").select("id, nome, dono, saldo_atual_cents").order("nome");
-  if (pessoa !== "Casal") {
-    contasQuery = contasQuery.eq("dono", pessoa);
-  }
+  if (pessoa !== "Casal") contasQuery = contasQuery.eq("dono", pessoa);
 
   // Paginado (fetchAllRows): a tabela `saida` passa de 1000 linhas e o limite
-  // padrão do PostgREST truncaria o cálculo do saldo previsto por conta.
+  // padrão do PostgREST truncaria o saldo previsto por conta.
   const [contasResp, saidasTodas, entradasTodas, categoriasResp, cartoesResp] = await Promise.all([
     contasQuery,
     fetchAllRows<Saida>((from, to) => {
       let q = supabase
         .from("saida")
         .select(
-          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at"
+          "id, nome, total_cents, data, vencimento, pessoa, metodo, status, origem, categoria_id, conta_id, cartao_id, parcela, created_at, recorrente_id"
         );
       if (pessoa !== "Casal") q = q.eq("pessoa", pessoa);
       return q.order("id").range(from, to);
@@ -62,133 +84,263 @@ export default async function MesPage({
     fetchAllRows<Entrada>((from, to) => {
       let q = supabase
         .from("entrada")
-        .select(
-          "id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at"
-        );
+        .select("id, nome, quantia_cents, valor_recebido_cents, data, pessoa, status, conta_destino_id, notas, created_at");
       if (pessoa !== "Casal") q = q.eq("pessoa", pessoa);
       return q.order("id").range(from, to);
     }),
     supabase.from("categoria").select("id, nome, dono").order("nome"),
-    supabase.from("cartao").select("id, conta_vinculada_id"),
+    supabase.from("cartao").select("id, nome, conta_vinculada_id"),
   ]);
 
-  const { data: contas } = contasResp;
-  const { data: categorias } = categoriasResp;
-  const { data: cartoes } = cartoesResp;
-  const todasContas = (contas ?? []) as Conta[];
+  const todasContas = (contasResp.data ?? []) as Conta[];
   const todasSaidas = saidasTodas;
   const todasEntradas = entradasTodas;
-  const todasCategorias = (categorias ?? []) as Categoria[];
-  const contaVinculadaPorCartaoId = new Map(
-    ((cartoes ?? []) as { id: string; conta_vinculada_id: string | null }[]).map((c) => [c.id, c.conta_vinculada_id])
-  );
+  const todasCategorias = (categoriasResp.data ?? []) as Categoria[];
+  const cartoes = (cartoesResp.data ?? []) as { id: string; nome: string; conta_vinculada_id: string | null }[];
+  const contaVinculadaPorCartaoId = new Map(cartoes.map((c) => [c.id, c.conta_vinculada_id]));
+  const categoriaNome = new Map(todasCategorias.map((c) => [c.id, c.nome]));
+  const contaNome = new Map(todasContas.map((c) => [c.id, c.nome]));
+  const cartaoNome = new Map(cartoes.map((c) => [c.id, c.nome]));
 
-  const gastosPorConta = todasContas.map((conta) => {
-    const { gastos, entradasConta, saldoPrevisto } = resumoContaMes(
-      conta,
-      todasSaidas,
-      todasEntradas,
-      mesReferencia,
-      contaVinculadaPorCartaoId
-    );
-    return { conta, gastos, entradasConta, saldoPrevisto };
-  });
+  // Recortes: saídas por vencimento, entradas por data (regra 4).
+  const saidasMes = saidasComVencimentoNoMes(todasSaidas, mesReferencia);
+  const saidasAnt = saidasComVencimentoNoMes(todasSaidas, mesAnterior);
+  const entradasMes = entradasNoMes(todasEntradas, mesReferencia);
+  const entradasAnt = entradasNoMes(todasEntradas, mesAnterior);
 
-  const entradasTotal = gastosPorConta.reduce((sum, c) => sum + c.entradasConta, 0);
-  const gastosTotal = gastosPorConta.reduce((sum, c) => sum + c.gastos, 0);
-  const resultado = entradasTotal - gastosTotal;
+  const soma = (xs: { total_cents: number }[]) => xs.reduce((s, x) => s + x.total_cents, 0);
+  const somaE = (xs: { quantia_cents: number }[]) => xs.reduce((s, x) => s + x.quantia_cents, 0);
+  const entradasTotal = somaE(entradasMes);
+  const saidasTotal = soma(saidasMes);
+  const resultado = entradasTotal - saidasTotal;
+  const entradasAntTotal = somaE(entradasAnt);
+  const saidasAntTotal = soma(saidasAnt);
+  const resultadoAnt = entradasAntTotal - saidasAntTotal;
+  const taxa = taxaPoupancaPct(entradasTotal, saidasTotal);
+  const taxaAnt = taxaPoupancaPct(entradasAntTotal, saidasAntTotal);
 
-  const categoriaTotais = gastosPorCategoria(todasSaidas, mesReferencia);
-  const categoriasOrdenadas = [...categoriaTotais.entries()]
-    .map(([categoriaId, total]) => ({
-      categoria: todasCategorias.find((c) => c.id === categoriaId),
-      total,
-    }))
-    .filter((c): c is { categoria: Categoria; total: number } => Boolean(c.categoria))
-    .sort((a, b) => b.total - a.total);
-  const maiorCategoriaTotal = categoriasOrdenadas[0]?.total ?? 1;
-  const totalCategorias = categoriasOrdenadas.reduce((sum, c) => sum + c.total, 0);
+  const fv = fixasVsVariaveis(saidasMes);
+  const pctFixas = saidasTotal > 0 ? (fv.fixas / saidasTotal) * 100 : 0;
+  const fixasSobreEntradas = entradasTotal > 0 ? (fv.fixas / entradasTotal) * 100 : null;
+
+  const linhasCategoria = categoriasComparadas(saidasMes, saidasAnt);
+  const nomeCat = (id: string | null) => (id ? categoriaNome.get(id) ?? "Categoria removida" : "Sem categoria");
+  const maisSubiram = [...linhasCategoria].filter((l) => l.variacao.abs > 0).sort((a, b) => b.variacao.abs - a.variacao.abs).slice(0, 3);
+  const maisCairam = [...linhasCategoria].filter((l) => l.variacao.abs < 0).sort((a, b) => a.variacao.abs - b.variacao.abs).slice(0, 3);
+
+  const maiores = maioresSaidas(saidasMes, 8);
+  const destino = (s: Saida) =>
+    (s.metodo === "Débito" ? contaNome.get(s.conta_id ?? "") : cartaoNome.get(s.cartao_id ?? "")) ?? "—";
+  const ddmm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—");
+
+  const saldoPorConta = todasContas.map((conta) => ({
+    conta,
+    saldoPrevisto: resumoContaMes(conta, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId).saldoPrevisto,
+  }));
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
-      <PageHeader title="Resumo Mensal" subtitle={pessoa === "Casal" ? "Visão do casal" : `Visão de ${pessoa}`}>
+      <PageHeader title="Resumo Mensal" subtitle={`Fechamento de ${labelMes(mesReferencia)} · ${pessoa === "Casal" ? "casal" : pessoa}`}>
         <MonthSelector
           label={labelMes(mesReferencia)}
           hrefAnterior={monthHref(pessoa, mesAnterior)}
           hrefSeguinte={monthHref(pessoa, mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : monthHref(pessoa, referencia)}
         />
       </PageHeader>
 
-      <div className="mb-6 flex flex-wrap gap-1.5">
-        <ChipLink label={ativa} selected={pessoa === ativa} href={monthHref(ativa, mesReferencia)} />
-        <ChipLink label="Casal" selected={pessoa === "Casal"} href={monthHref("Casal", mesReferencia)} />
-      </div>
+      <EscopoChips ativa={ativa} escopo={pessoa} href={(e) => monthHref(e, mesReferencia)} />
 
+      {/* Fechamento: os quatro números do mês, cada um contra o mês anterior. */}
       <Card variant="raised" className="p-6">
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <dl className="grid grid-cols-2 gap-5 lg:grid-cols-4">
           <div>
-            <dt className="type-caption text-ink-3">Entradas do mês</dt>
+            <dt className="type-caption text-ink-3">Entradas</dt>
             <dd className="type-headline mt-1 text-ink">
               <Amount cents={entradasTotal} semantic="none" />
             </dd>
+            <Delta v={variacao(entradasTotal, entradasAntTotal)} contra={contra} />
           </div>
           <div>
-            <dt className="type-caption text-ink-3">Saídas do mês</dt>
+            <dt className="type-caption text-ink-3">Saídas</dt>
             <dd className="type-headline mt-1 text-ink">
-              <Amount cents={gastosTotal} semantic="none" />
+              <Amount cents={saidasTotal} semantic="none" />
             </dd>
+            <Delta v={variacao(saidasTotal, saidasAntTotal)} subirEhRuim contra={contra} />
           </div>
           <div>
             <dt className="type-caption text-ink-3">Resultado</dt>
             <dd className="type-headline mt-1">
               <Amount cents={resultado} semantic="both" />
             </dd>
+            <Delta v={variacao(resultado, resultadoAnt)} contra={contra} />
+          </div>
+          <div>
+            <dt className="type-caption text-ink-3">Taxa de poupança</dt>
+            <dd className={`type-headline figures mt-1 ${taxa === null ? "text-ink-3" : taxa >= 0 ? "text-pos" : "text-neg"}`}>
+              {taxa === null ? "—" : `${Math.round(taxa)}%`}
+            </dd>
+            <p className="type-caption text-ink-3">
+              {taxa === null
+                ? "sem entradas no mês"
+                : taxaAnt === null
+                  ? "do que entrou, sobrou"
+                  : `${contra}: ${Math.round(taxaAnt)}%`}
+            </p>
           </div>
         </dl>
       </Card>
 
       <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Fixas x variáveis */}
         <section>
-          <h2 className="type-title mb-3 text-ink">Saldo previsto por conta</h2>
-          <Card className="flex flex-col divide-y divide-hairline">
-            {gastosPorConta.length === 0 ? (
-              <p className="type-body py-4 text-center text-ink-2">Nenhuma conta cadastrada.</p>
-            ) : (
-              gastosPorConta.map(({ conta, saldoPrevisto }) => (
-                <div key={conta.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-[0.875rem] text-ink">{conta.nome}</span>
-                    <PersonTag pessoa={conta.dono} />
-                  </span>
-                  <Amount cents={saldoPrevisto} className="shrink-0 text-[0.875rem] font-medium text-ink" />
-                </div>
-              ))
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+            <h2 className="type-title text-ink">Fixas x variáveis</h2>
+            <p className="type-caption text-ink-3">quanto do mês já estava comprometido</p>
+          </div>
+          <Card className="flex flex-col gap-4">
+            <ProgressBar percent={pctFixas} colorClassName="bg-ink-2" heightClassName="h-2" minPercent={0} />
+            <dl className="grid grid-cols-2 gap-4">
+              <div>
+                <dt className="type-caption flex items-center gap-1.5 text-ink-3">
+                  Contas fixas <FixaTag />
+                </dt>
+                <dd className="type-title mt-1 text-ink">
+                  <Amount cents={fv.fixas} semantic="none" />
+                </dd>
+                <p className="type-caption text-ink-3">
+                  {fv.nFixas} {fv.nFixas === 1 ? "lançamento" : "lançamentos"} · {Math.round(pctFixas)}% das saídas
+                </p>
+              </div>
+              <div className="text-right">
+                <dt className="type-caption text-ink-3">Variáveis</dt>
+                <dd className="type-title mt-1 text-ink">
+                  <Amount cents={fv.variaveis} semantic="none" />
+                </dd>
+                <p className="type-caption text-ink-3">
+                  {fv.nVariaveis} {fv.nVariaveis === 1 ? "lançamento" : "lançamentos"} · {Math.round(100 - pctFixas)}%
+                </p>
+              </div>
+            </dl>
+            {fixasSobreEntradas !== null && (
+              <p className="type-caption border-t border-hairline pt-3 text-ink-2">
+                As contas fixas comprometem <span className="figures font-medium text-ink">{Math.round(fixasSobreEntradas)}%</span> das
+                entradas do mês.
+              </p>
             )}
           </Card>
         </section>
 
-        {categoriasOrdenadas.length > 0 && (
-          <section>
-            <h2 className="type-title mb-3 text-ink">Saídas por categoria</h2>
-            <Card className="flex flex-col gap-3.5">
-              {categoriasOrdenadas.map(({ categoria, total }) => (
-                <div key={categoria.id} className="flex flex-col gap-1.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-[0.875rem] text-ink">{categoria.nome}</span>
-                    <span className="flex shrink-0 items-baseline gap-2">
-                      <span className="type-caption figures text-ink-3">
-                        {totalCategorias > 0 ? Math.round((total / totalCategorias) * 100) : 0}%
-                      </span>
-                      <Amount cents={total} semantic="none" className="text-[0.875rem] text-ink-2" />
+        {/* Maiores saídas */}
+        <section>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+            <h2 className="type-title text-ink">Maiores saídas</h2>
+            <p className="type-caption text-ink-3">as 8 que mais pesaram</p>
+          </div>
+          <Card>
+            {maiores.length === 0 ? (
+              <p className="type-body py-4 text-center text-ink-2">Sem saídas neste mês.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-hairline">
+                {maiores.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+                        <span className="truncate">{s.nome}</span>
+                        {s.recorrente_id && <FixaTag />}
+                      </p>
+                      <p className="type-caption truncate text-ink-3">
+                        {nomeCat(s.categoria_id)} · {s.metodo} · {destino(s)} · {ddmm(s.vencimento)}
+                      </p>
+                    </div>
+                    {pessoa === "Casal" && <PersonTag pessoa={s.pessoa} />}
+                    <Amount cents={s.total_cents} semantic="none" className="shrink-0 text-[0.875rem] font-medium text-ink" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </section>
+      </div>
+
+      {/* Categorias: atual x anterior */}
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Categorias · {MESES_ABREV[mesReferencia.month - 1]} x {contra}</h2>
+          <p className="type-caption text-ink-3">por vencimento · gasto que sobe em granada, que cai em verde</p>
+        </div>
+        <Card className="flex flex-col gap-4">
+          {(maisSubiram.length > 0 || maisCairam.length > 0) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1.5 border-b border-hairline pb-3">
+              {maisSubiram.length > 0 && (
+                <p className="type-caption text-ink-2">
+                  <span className="text-neg">Subiram mais:</span>{" "}
+                  {maisSubiram.map((l) => `${nomeCat(l.categoriaId)} (+${formatCentsToBRL(l.variacao.abs)})`).join(" · ")}
+                </p>
+              )}
+              {maisCairam.length > 0 && (
+                <p className="type-caption text-ink-2">
+                  <span className="text-pos">Caíram mais:</span>{" "}
+                  {maisCairam.map((l) => `${nomeCat(l.categoriaId)} (−${formatCentsToBRL(-l.variacao.abs)})`).join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+          {linhasCategoria.length === 0 ? (
+            <p className="type-body py-4 text-center text-ink-2">Sem saídas nos dois meses.</p>
+          ) : (
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-baseline gap-x-4 gap-y-2">
+              <span />
+              <span className="type-eyebrow text-right text-ink-3">{contra}</span>
+              <span className="type-eyebrow text-right text-ink-3">{MESES_ABREV[mesReferencia.month - 1]}</span>
+              <span className="type-eyebrow text-right text-ink-3">Δ</span>
+              {linhasCategoria.map((l) => {
+                const sinal = l.variacao.abs > 0 ? "+" : l.variacao.abs < 0 ? "−" : "";
+                const cor = l.variacao.abs > 0 ? "text-neg" : l.variacao.abs < 0 ? "text-pos" : "text-ink-3";
+                return (
+                  <div key={l.categoriaId ?? "__sem"} className="contents">
+                    <span className={`truncate text-[0.875rem] ${l.categoriaId ? "text-ink" : "text-ink-2"}`}>{nomeCat(l.categoriaId)}</span>
+                    <Amount cents={l.anterior} semantic="none" className="text-right text-[0.8125rem] text-ink-3" />
+                    <Amount cents={l.atual} semantic="none" className="text-right text-[0.8125rem] text-ink" />
+                    <span className={`figures text-right text-[0.8125rem] ${cor}`}>
+                      {l.variacao.abs === 0 ? "=" : `${sinal}${formatCentsToBRL(Math.abs(l.variacao.abs))}`}
                     </span>
                   </div>
-                  <ProgressBar percent={(total / maiorCategoriaTotal) * 100} heightClassName="h-1" />
-                </div>
-              ))}
-            </Card>
-          </section>
-        )}
-      </div>
+                );
+              })}
+              <span className="border-t border-hairline pt-2 text-[0.875rem] font-medium text-ink">Total</span>
+              <Amount cents={saidasAntTotal} semantic="none" className="border-t border-hairline pt-2 text-right text-[0.8125rem] text-ink-3" />
+              <Amount cents={saidasTotal} semantic="none" className="border-t border-hairline pt-2 text-right text-[0.8125rem] font-medium text-ink" />
+              <span className={`figures border-t border-hairline pt-2 text-right text-[0.8125rem] font-medium ${saidasTotal > saidasAntTotal ? "text-neg" : saidasTotal < saidasAntTotal ? "text-pos" : "text-ink-3"}`}>
+                {saidasTotal === saidasAntTotal ? "=" : `${saidasTotal > saidasAntTotal ? "+" : "−"}${formatCentsToBRL(Math.abs(saidasTotal - saidasAntTotal))}`}
+              </span>
+            </div>
+          )}
+        </Card>
+      </section>
+
+      {/* Saldo previsto por conta */}
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+          <h2 className="type-title text-ink">Saldo previsto por conta</h2>
+          <p className="type-caption text-ink-3">saldo atual + a receber − a pagar no mês</p>
+        </div>
+        <Card className="flex flex-col divide-y divide-hairline">
+          {saldoPorConta.length === 0 ? (
+            <p className="type-body py-4 text-center text-ink-2">Nenhuma conta cadastrada.</p>
+          ) : (
+            saldoPorConta.map(({ conta, saldoPrevisto }) => (
+              <div key={conta.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-[0.875rem] text-ink">{conta.nome}</span>
+                  <PersonTag pessoa={conta.dono} />
+                </span>
+                <Amount cents={saldoPrevisto} className="shrink-0 text-[0.875rem] font-medium text-ink" />
+              </div>
+            ))
+          )}
+        </Card>
+      </section>
     </main>
   );
 }

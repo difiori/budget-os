@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui/page-header";
 import { MonthSelector } from "@/components/ui/month-selector";
-import { ChipLink } from "@/components/ui/chip-link";
+import { EscopoChips } from "@/components/ui/escopo-chips";
+import { resolverEscopo, type Escopo } from "@/lib/domain/escopo";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
@@ -13,9 +14,8 @@ import { formatCentsToBRL } from "@/lib/domain/money";
 import { labelMes } from "@/lib/format/meses";
 import { AjustarSaldo } from "@/components/conta/ajustar-saldo";
 import { MetasPoupanca, type MetaView } from "./metas-poupanca";
-import type { Cartao, CategoriaDono, Conta, Entrada, MetaPoupanca, Pessoa, Saida } from "@/lib/domain/types";
+import type { Cartao, CategoriaDono, Conta, Entrada, MetaPoupanca, Saida } from "@/lib/domain/types";
 
-type Escopo = Pessoa | "Casal";
 
 function contasHref(escopo: Escopo, mes: CalendarDate) {
   return `/contas?pessoa=${escopo}&ano=${mes.year}&mes=${mes.month}`;
@@ -36,7 +36,7 @@ export default async function ContasPage({
 }) {
   const params = await searchParams;
   const ativa = await pessoaAtiva();
-  const escopo: Escopo = params.pessoa === "Casal" ? "Casal" : ativa;
+  const escopo = resolverEscopo(params.pessoa, ativa);
 
   const supabase = await createClient();
   const referencia = hoje();
@@ -158,13 +158,11 @@ export default async function ContasPage({
           label={labelMes(mesReferencia)}
           hrefAnterior={contasHref(escopo, mesAnterior)}
           hrefSeguinte={contasHref(escopo, mesSeguinte)}
+          hrefHoje={isSameMonth(mesReferencia, referencia) ? undefined : contasHref(escopo, referencia)}
         />
       </PageHeader>
 
-      <div className="mb-6 flex flex-wrap gap-1.5">
-        <ChipLink label={ativa} selected={escopo === ativa} href={contasHref(ativa, mesReferencia)} />
-        <ChipLink label="Casal" selected={escopo === "Casal"} href={contasHref("Casal", mesReferencia)} />
-      </div>
+      <EscopoChips ativa={ativa} escopo={escopo} href={(e) => contasHref(e, mesReferencia)} />
 
       {views.length === 0 ? (
         <div className="rounded-md border border-hairline bg-surface p-8 text-center">
