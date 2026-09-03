@@ -8,6 +8,7 @@ import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/ca
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { labelMes, MESES_ABREV } from "@/lib/format/meses";
 import { CategoriasList, type CategoriaView } from "./categorias-list";
+import { ClassificarIA } from "@/components/categorias/classificar-ia";
 import type { Categoria, Saida } from "@/lib/domain/types";
 
 
@@ -52,6 +53,19 @@ export default async function CategoriasPage({
     supabase.from("conta").select("id, nome"),
     supabase.from("cartao").select("id, nome"),
   ]);
+
+  // Quantas saídas ainda estão em "Gastos Diversos" ou sem categoria no escopo
+  // (todas, não só do mês) — alimenta o painel de classificação com IA.
+  const iaDisponivel = !!process.env.ANTHROPIC_API_KEY;
+  const gastosDiversosId = ((categorias ?? []) as Categoria[]).find((c) => c.nome === "Gastos Diversos")?.id ?? null;
+  let pendentesNoTotal = 0;
+  if (iaDisponivel) {
+    let pq = supabase.from("saida").select("id", { count: "exact", head: true });
+    pq = gastosDiversosId ? pq.or(`categoria_id.eq.${gastosDiversosId},categoria_id.is.null`) : pq.is("categoria_id", null);
+    if (escopo !== "Casal") pq = pq.eq("pessoa", escopo);
+    const { count } = await pq;
+    pendentesNoTotal = count ?? 0;
+  }
 
   // Dois meses numa consulta: o em foco (lista + total) e o anterior (só o
   // total, para a variação por categoria).
@@ -104,6 +118,7 @@ export default async function CategoriasPage({
     });
   }
   const totalMes = todasSaidas.reduce((sum, s) => sum + s.total_cents, 0);
+  const pendentesNoMes = todasSaidas.filter((s) => !s.categoria_id || s.categoria_id === gastosDiversosId).length;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
@@ -117,6 +132,20 @@ export default async function CategoriasPage({
       </PageHeader>
 
       <EscopoChips ativa={ativa} escopo={escopo} href={(e) => categoriasHref(e, mesReferencia)} />
+
+      {iaDisponivel && (
+        <div className="mb-6">
+          <ClassificarIA
+            escopo={escopo}
+            inicioMes={inicioMes}
+            fimMes={fimMes}
+            mesLabel={labelMes(mesReferencia)}
+            pendentesNoMes={pendentesNoMes}
+            pendentesNoTotal={pendentesNoTotal}
+            categorias={todasCategorias}
+          />
+        </div>
+      )}
 
       {todasViews.length === 0 ? (
         <div className="rounded-md border border-hairline bg-surface p-8 text-center">
