@@ -38,12 +38,38 @@ const base: LancamentoInterpretado = {
 describe("prompt", () => {
   it("system prompt traz catálogo com ids e histórico", () => {
     const p = systemPromptInterpretar(catalogo);
-    expect(p).toContain("C6 Business Mastercard (id k1)");
+    expect(p).toContain("K1 = C6 Business Mastercard");
     expect(p).toContain('"Amazon" → Gastos Diversos · Crédito · C6 Business Mastercard');
     expect(p).toContain("A pessoa ativa é Diego");
   });
   it("mensagem do usuário leva a data de hoje", () => {
     expect(mensagemUsuarioInterpretar("  54 amazon ", { year: 2026, month: 9, day: 2 })).toBe('Hoje é 2026-09-02. Frase: """54 amazon"""');
+  });
+});
+
+describe("lote", () => {
+  it("o schema aceita vários lançamentos e o prompt pede um item por lançamento", async () => {
+    const { LoteInterpretadoSchema } = await import("./interpretar-lancamento");
+    expect(LoteInterpretadoSchema.parse({ lancamentos: [base, { ...base, nome: "iFood" }] }).lancamentos).toHaveLength(2);
+    expect(LoteInterpretadoSchema.safeParse({ lancamentos: Array(21).fill(base) }).success).toBe(false);
+    expect(systemPromptInterpretar(catalogo)).toContain("um item por lançamento");
+  });
+});
+
+describe("códigos curtos", () => {
+  it("o prompt lista códigos, não uuids, e o saneamento traduz de volta", () => {
+    const prompt = systemPromptInterpretar(catalogo);
+    expect(prompt).toContain("K1 = C6 Business Mastercard");
+    expect(prompt).not.toContain("(id k1)");
+    const s = saneiaInterpretacao({ ...base, destino_id: "K1", categoria_id: "G1" }, catalogo);
+    expect(s.destino_id).toBe("k1");
+    expect(s.categoria_id).toBe("g");
+    expect(s.duvidas).toEqual([]);
+  });
+  it("código inexistente vira null com dúvida", () => {
+    const s = saneiaInterpretacao({ ...base, destino_id: "K9" }, catalogo);
+    expect(s.destino_id).toBeNull();
+    expect(s.duvidas.some((d) => d.includes("cartão"))).toBe(true);
   });
 });
 

@@ -77,7 +77,8 @@ export async function POST(request: Request) {
   if (typeof corpo.texto === "string" && corpo.texto.trim()) {
     const r = await interpretarTexto(createAdminClient(), pessoa, corpo.texto);
     if (!r.ok) return erro(422, r.error);
-    const l = r.lancamento;
+    if (r.lancamentos.length !== 1) return erro(422, "A frase tem vários lançamentos; o atalho grava um por vez — use o app para lotes.");
+    const l = r.lancamentos[0];
     if (l.tipo === "Transferencia") return erro(422, "Transferência entre contas: faça pelo app.");
     if (l.conta_fixa_existente) return erro(422, `"${l.nome}" já é uma conta fixa: registre o pagamento do mês em Contas fixas.`);
     if (l.conta_fixa) return erro(422, "Conta fixa nova é um contrato mensal: cadastre pelo app.");

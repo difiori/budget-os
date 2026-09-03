@@ -10,7 +10,18 @@ import type { CatalogoIA } from "./interpretar-lancamento";
  * recente) com categoria/método/destino. Funciona com o cliente de sessão
  * (app) ou o administrativo (API dos Atalhos).
  */
+const CACHE_MS = 2 * 60 * 1000;
+const cache = new Map<Pessoa, { em: number; catalogo: CatalogoIA }>();
+
 export async function montarCatalogoIA(supabase: SupabaseClient, pessoa: Pessoa): Promise<CatalogoIA> {
+  const quente = cache.get(pessoa);
+  if (quente && Date.now() - quente.em < CACHE_MS) return quente.catalogo;
+  const catalogo = await montarCatalogoDoBanco(supabase, pessoa);
+  cache.set(pessoa, { em: Date.now(), catalogo });
+  return catalogo;
+}
+
+async function montarCatalogoDoBanco(supabase: SupabaseClient, pessoa: Pessoa): Promise<CatalogoIA> {
   const [{ data: contas }, { data: cartoes }, { data: categorias }, { data: saidas }, { data: fixas }] = await Promise.all([
     supabase.from("conta").select("id, nome, dono").eq("dono", pessoa).order("nome"),
     supabase.from("cartao").select("id, nome, dono").eq("dono", pessoa).order("nome"),

@@ -398,6 +398,8 @@ export interface SugestaoEntrada {
 export interface Sugestoes {
   saidas: SugestaoSaida[];
   entradas: SugestaoEntrada[];
+  /** Nomes das contas fixas ativas (o atalho local do Lançar rápido não pode tratá-las como gasto novo). */
+  fixas: string[];
 }
 
 /**
@@ -408,7 +410,7 @@ export interface Sugestoes {
  */
 export async function carregarSugestoes(): Promise<Sugestoes> {
   const supabase = await createClient();
-  const [{ data: saidas }, { data: entradas }] = await Promise.all([
+  const [{ data: saidas }, { data: entradas }, { data: fixas }] = await Promise.all([
     supabase
       .from("saida")
       .select("nome, pessoa, categoria_id, metodo, conta_id, cartao_id, total_cents, parcela, recorrente_id")
@@ -419,17 +421,28 @@ export async function carregarSugestoes(): Promise<Sugestoes> {
       .select("nome, pessoa, conta_destino_id, quantia_cents")
       .order("created_at", { ascending: false })
       .limit(300),
+    supabase.from("recorrente").select("nome, ativo, fim"),
   ]);
+  const hojeISO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const nomesFixas = [...new Set(((fixas ?? []) as { nome: string; ativo: boolean; fim: string | null }[]).filter((f) => f.ativo && (!f.fim || f.fim >= hojeISO)).map((f) => f.nome))];
 
   const chave = (pessoa: string, nome: string) => `${pessoa}|${nome.trim().toLowerCase().replace(/\s+/g, " ")}`;
 
   const porSaida = new Map<string, SugestaoSaida>();
+  // Categoria: a mais usada com esse nome (não a última) — uma Amazon marcada
+  // como Alimentação uma vez não deve virar o padrão das próximas.
+  const categoriasPorChave = new Map<string, Map<string, number>>();
   for (const s of (saidas ?? []) as (SugestaoSaida & { parcela: string | null; recorrente_id: string | null })[]) {
     if (s.recorrente_id) continue;
     if (s.metodo !== "Débito" && s.metodo !== "Crédito") continue;
     const nome = nomeSemParcela(s.nome, s.parcela).trim();
     if (!nome) continue;
     const k = chave(s.pessoa, nome);
+    if (s.categoria_id) {
+      const contagem = categoriasPorChave.get(k) ?? new Map<string, number>();
+      contagem.set(s.categoria_id, (contagem.get(s.categoria_id) ?? 0) + 1);
+      categoriasPorChave.set(k, contagem);
+    }
     const atual = porSaida.get(k);
     if (atual) atual.vezes += 1;
     else
@@ -455,5 +468,11 @@ export async function carregarSugestoes(): Promise<Sugestoes> {
     else porEntrada.set(k, { nome, pessoa: e.pessoa, conta_destino_id: e.conta_destino_id, quantia_cents: e.quantia_cents, vezes: 1 });
   }
 
-  return { saidas: [...porSaida.values()], entradas: [...porEntrada.values()] };
+  for (const [k, sug] of porSaida) {
+    const contagem = categoriasPorChave.get(k);
+    if (!contagem) continue;
+    sug.categoria_id = [...contagem.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  return { saidas: [...porSaida.values()], entradas: [...porEntrada.values()], fixas: nomesFixas };
 }

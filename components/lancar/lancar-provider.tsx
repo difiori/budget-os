@@ -62,7 +62,7 @@ export function LancarProvider({
   // Histórico para o autocompletar: busca uma vez, na primeira abertura, e
   // reaproveita enquanto a página viver.
   useEffect(() => {
-    if (!aberto || sugestoes) return;
+    if (!(aberto || rapidoAberto) || sugestoes) return;
     let cancelado = false;
     carregarSugestoes()
       .then((s) => {
@@ -74,7 +74,7 @@ export function LancarProvider({
     return () => {
       cancelado = true;
     };
-  }, [aberto, sugestoes]);
+  }, [aberto, rapidoAberto, sugestoes]);
 
   function abrir(interpretacao?: LancamentoInterpretado) {
     setInicial((a) => ({ n: a.n + 1, l: interpretacao ?? null }));
@@ -96,7 +96,7 @@ export function LancarProvider({
     <Ctx.Provider value={{ abrir, abrirRapido: () => setRapidoAberto(true), iaDisponivel, aberto: aberto || rapidoAberto }}>
       {children}
       {rapidoAberto && iaDisponivel && (
-        <LancarRapido contas={contas} cartoes={cartoes} categorias={categorias} onFechar={fecharRapido} onAjustar={abrir} />
+        <LancarRapido contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} sugestoes={sugestoes} onFechar={fecharRapido} onAjustar={abrir} />
       )}
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

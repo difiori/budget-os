@@ -2,16 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Mic, Repeat, Sparkles, Square, X } from "lucide-react";
-import { criarLancamento } from "@/app/(app)/lancar/actions";
+import { Check, Mic, Repeat, Sparkles, Square, X } from "lucide-react";
+import { criarLancamento, type Sugestoes } from "@/app/(app)/lancar/actions";
 import { interpretarLancamentoIA } from "@/app/(app)/lancar/ia-actions";
 import type { LancamentoInterpretado } from "@/lib/ia/interpretar-lancamento";
 import { estadoDaInterpretacao, pendenciasDoEstado, formDataDoEstado, permiteRecorrente, type EstadoLancamento } from "@/lib/lancar/interpretacao";
+import { interpretarLoteLocal } from "@/lib/lancar/interpretar-local";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
-import type { Cartao, Categoria, Conta } from "@/lib/domain/types";
+import type { Cartao, Categoria, Conta, Pessoa } from "@/lib/domain/types";
 
 /* ------------------------------------------------------------------------ */
 /* Voz do navegador (Web Speech API, pt-BR)                                  */
@@ -38,7 +39,7 @@ function criarReconhecimentoVoz(): ReconhecimentoVoz | null {
   return Construtor ? new Construtor() : null;
 }
 
-const EXEMPLOS = ["54 na Amazon no Business", "paguei 320 de luz da mãe hoje", "ifood ontem 87,90 em 3x no Carbon", "recebi 500 de freela na C6"];
+const EXEMPLOS = ["54 na Amazon no Business", "paguei 320 de luz da mãe hoje", "no Carbon: 87,90 iFood ontem e 45 Uber", "recebi 500 de freela na C6"];
 
 function hojeISO(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -49,62 +50,109 @@ function formatDataBR(iso: string): string {
   return y && m && d ? `${d}/${m}/${y}` : "—";
 }
 
-function Linha({ label, value, alerta = false }: { label: string; value: string | null; alerta?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="type-caption shrink-0 text-ink-3">{label}</dt>
-      <dd className={`type-label text-right ${value ? (alerta ? "text-warn" : "text-ink") : "text-warn"}`}>{value ?? "falta escolher"}</dd>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------------ */
+
+interface Item {
+  chave: string;
+  /** "local" = resolvido na hora pelo histórico, sem IA. */
+  origem: "local" | "ia";
+  lancamento: LancamentoInterpretado;
+  estado: EstadoLancamento;
+  selecionado: boolean;
+  salvo: boolean;
+  erro: string | null;
+}
 
 interface Props {
   contas: Conta[];
   cartoes: Cartao[];
   categorias: Categoria[];
+  pessoaAtiva: Pessoa;
+  /** Histórico de nomes (null enquanto carrega): alimenta o atalho local sem IA. */
+  sugestoes: Sugestoes | null;
   onFechar: () => void;
   /** Abre o formulário completo já preenchido com a interpretação. */
   onAjustar: (l: LancamentoInterpretado) => void;
 }
 
 /**
- * Lançar rápido, separado do formulário: uma frase (digitada ou ditada), a IA
- * devolve o lançamento, o recibo mostra o que ela entendeu e a pessoa decide:
- * salvar direto (mesma ação do servidor que o formulário usa), ajustar no
- * formulário completo, ou tentar outra frase. Fica aberto depois de salvar
- * para lançar vários seguidos.
+ * Lançar rápido, separado do formulário: uma frase ou um lote ("54 amazon,
+ * 30 ifood e paguei a luz"), digitado ou ditado; a IA devolve um item por
+ * lançamento; cada item vira um recibo com checkbox. "Salvar N" grava os
+ * marcados pela mesma ação do servidor que o formulário usa; "Ajustar" abre o
+ * formulário só para aquele item. Fica aberto para o próximo lote.
  */
-export function LancarRapido({ contas, cartoes, categorias, onFechar, onAjustar }: Props) {
+export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugestoes, onFechar, onAjustar }: Props) {
   const toast = useToast();
   const [texto, setTexto] = useState("");
   const [ouvindo, setOuvindo] = useState(false);
   const [interpretando, setInterpretando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{ frase: string; lancamento: LancamentoInterpretado; estado: EstadoLancamento } | null>(null);
+  const [resultado, setResultado] = useState<{ frase: string; itens: Item[] } | null>(null);
   const [salvos, setSalvos] = useState(0);
   const [suportaVoz] = useState(() => criarReconhecimentoVoz() !== null);
   const reconhecimento = useRef<ReconhecimentoVoz | null>(null);
-  const campo = useRef<HTMLInputElement | null>(null);
+  const campo = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!resultado) campo.current?.focus();
   }, [resultado]);
 
+  function nomeDestino(e: EstadoLancamento): string | null {
+    if (e.tipo === "Saida" && e.modo === "Credito") return cartoes.find((c) => c.id === e.destinoId)?.nome ?? null;
+    return contas.find((c) => c.id === e.destinoId)?.nome ?? null;
+  }
+  function nomeCategoria(e: EstadoLancamento): string | null {
+    return categorias.find((c) => c.id === e.categoriaId)?.nome ?? null;
+  }
+  /** Conta fixa não se salva daqui: a existente se paga em Contas fixas (senão
+   * duplica a ocorrência do mês); a nova é um contrato, que merece o formulário. */
+  function motivoSemSalvar(it: Pick<Item, "lancamento" | "estado">): "fixa-existente" | "fixa-nova" | "transferencia" | "pendencia" | null {
+    if (it.lancamento.conta_fixa_existente) return "fixa-existente";
+    if (it.estado.tipo === "Transferencia") return "transferencia";
+    if (it.estado.tipo === "Saida" && it.estado.recorrente) return "fixa-nova";
+    if (pendenciasDoEstado(it.estado).length > 0) return "pendencia";
+    return null;
+  }
+
+  function montarItens(lancamentos: LancamentoInterpretado[], origem: Item["origem"]): Item[] {
+    const hoje = hojeISO();
+    return lancamentos.map((l, i) => {
+      const estado = estadoDaInterpretacao(l, hoje);
+      const semSalvar = motivoSemSalvar({ lancamento: l, estado });
+      return { chave: `${Date.now()}-${i}`, origem, lancamento: l, estado, selecionado: semSalvar === null && l.confianca >= 0.6, salvo: false, erro: null };
+    });
+  }
+
   async function interpretar(frase: string) {
     const t = frase.trim();
     if (!t || interpretando) return;
-    setInterpretando(true);
     setErro(null);
+    // 1) Atalho local: nome conhecido + valor resolve na hora, sem chamar a IA.
+    if (sugestoes) {
+      const local = interpretarLoteLocal(t, {
+        pessoa: pessoaAtiva,
+        hojeISO: hojeISO(),
+        contas,
+        cartoes,
+        historico: sugestoes.saidas,
+        contasFixas: sugestoes.fixas,
+      });
+      if (local) {
+        setResultado({ frase: t, itens: montarItens(local, "local") });
+        return;
+      }
+    }
+    // 2) IA para o resto: nomes novos, entradas, transferências, datas, contas fixas.
+    setInterpretando(true);
     const r = await interpretarLancamentoIA(t);
     setInterpretando(false);
     if (!r.ok) {
       setErro(r.error);
       return;
     }
-    setResultado({ frase: t, lancamento: r.lancamento, estado: estadoDaInterpretacao(r.lancamento, hojeISO()) });
+    setResultado({ frase: t, itens: montarItens(r.lancamentos, "ia") });
   }
 
   function alternarVoz() {
@@ -118,9 +166,14 @@ export function LancarRapido({ contas, cartoes, categorias, onFechar, onAjustar 
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      const frase = e.results[0]?.[0]?.transcript ?? "";
-      setTexto(frase);
-      void interpretar(frase);
+      const frase = (e.results[0]?.[0]?.transcript ?? "").trim();
+      if (!frase) return;
+      // Campo vazio: ditou e já interpreta. Campo com texto: está compondo um
+      // lote — acrescenta e deixa a pessoa mandar quando terminar.
+      const anterior = texto.trim();
+      const completo = anterior ? `${anterior}\n${frase}` : frase;
+      setTexto(completo);
+      if (!anterior) void interpretar(completo);
     };
     rec.onerror = () => {
       setOuvindo(false);
@@ -138,49 +191,39 @@ export function LancarRapido({ contas, cartoes, categorias, onFechar, onAjustar 
     setTexto("");
   }
 
-  async function salvar() {
-    if (!resultado || salvando) return;
-    setSalvando(true);
-    setErro(null);
-    const r = await criarLancamento({ status: "idle" }, formDataDoEstado(resultado.estado, contas, cartoes));
-    setSalvando(false);
-    if (r.status !== "success") {
-      setErro(r.message ?? "Não foi possível salvar.");
-      return;
-    }
-    toast(`${resultado.estado.nomeInput} · R$ ${resultado.estado.valorInput} salvo.`);
-    setSalvos((n) => n + 1);
-    outraFrase();
+  function alternar(chave: string) {
+    setResultado((r) => r && { ...r, itens: r.itens.map((it) => (it.chave === chave ? { ...it, selecionado: !it.selecionado } : it)) });
   }
 
-  const e = resultado?.estado ?? null;
-  const l = resultado?.lancamento ?? null;
-  const pct = l ? Math.round(l.confianca * 100) : 0;
-  const pendencias = e ? pendenciasDoEstado(e) : [];
-  const transferencia = e?.tipo === "Transferencia";
-  // Conta fixa não se salva daqui: a existente se paga em Contas fixas (senão
-  // duplica a ocorrência do mês); a nova é um contrato, que merece o formulário.
-  const fixaExistente = !!l?.conta_fixa_existente;
-  const fixaNova = !!e && e.tipo === "Saida" && e.recorrente && !fixaExistente;
-  const salvaDireto = !transferencia && !fixaExistente && !fixaNova;
-  const nomeDestino = e
-    ? e.tipo === "Saida" && e.modo === "Credito"
-      ? cartoes.find((c) => c.id === e.destinoId)?.nome ?? null
-      : contas.find((c) => c.id === e.destinoId)?.nome ?? null
-    : null;
-  const nomeCategoria = e ? categorias.find((c) => c.id === e.categoriaId)?.nome ?? null : null;
-  let valorResumo = "R$ 0,00";
-  if (e) {
-    try {
-      valorResumo = formatCentsToBRL(parseCentsFromBRL(e.valorInput));
-    } catch {
-      /* mantém zero */
+  async function salvarSelecionados() {
+    if (!resultado || salvando) return;
+    const alvo = resultado.itens.filter((it) => it.selecionado && !it.salvo);
+    if (alvo.length === 0) return;
+    setSalvando(true);
+    setErro(null);
+    let ok = 0;
+    let atual = resultado.itens;
+    for (const it of alvo) {
+      const r = await criarLancamento({ status: "idle" }, formDataDoEstado(it.estado, contas, cartoes));
+      atual = atual.map((x) =>
+        x.chave === it.chave ? (r.status === "success" ? { ...x, salvo: true, selecionado: false, erro: null } : { ...x, erro: r.message ?? "Não foi possível salvar." }) : x
+      );
+      if (r.status === "success") ok += 1;
+      setResultado({ frase: resultado.frase, itens: atual });
     }
+    setSalvando(false);
+    if (ok > 0) {
+      setSalvos((n) => n + ok);
+      toast(ok === 1 ? `${alvo[0].estado.nomeInput} salvo.` : `${ok} lançamentos salvos.`);
+    }
+    // Tudo resolvido (salvo ou sem ação possível): volta para a próxima frase.
+    const restam = atual.filter((x) => !x.salvo && x.erro);
+    const pendentesDeAcao = atual.filter((x) => !x.salvo && motivoSemSalvar(x) !== null);
+    if (restam.length === 0 && pendentesDeAcao.length === 0 && ok === alvo.length) outraFrase();
   }
-  const parcelamento =
-    e && e.formato === "Parcelado" && l
-      ? `${e.numeroParcelas}x de ${formatCentsToBRL(Math.round(Math.abs(l.valor_cents) / Number(e.numeroParcelas)))}`
-      : null;
+
+  const selecionados = resultado?.itens.filter((it) => it.selecionado && !it.salvo).length ?? 0;
+  const podeSelecionar = resultado?.itens.some((it) => !it.salvo && motivoSemSalvar(it) === null) ?? false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -205,20 +248,21 @@ export function LancarRapido({ contas, cartoes, categorias, onFechar, onAjustar 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
           {!resultado ? (
             <>
-              <p className="type-body text-ink-2">Descreva o lançamento em uma frase. A IA monta, você confere e salva.</p>
-              <div className="flex items-center gap-2">
-                <input
+              <p className="type-body text-ink-2">Descreva um ou vários lançamentos. A IA monta, você confere e salva.</p>
+              <div className="flex items-start gap-2">
+                <textarea
                   ref={campo}
                   value={texto}
                   onChange={(ev) => setTexto(ev.target.value)}
                   onKeyDown={(ev) => {
-                    if (ev.key === "Enter") {
+                    if (ev.key === "Enter" && !ev.shiftKey) {
                       ev.preventDefault();
                       void interpretar(texto);
                     }
                   }}
-                  placeholder={ouvindo ? "Ouvindo…" : "ex.: 54 na Amazon no Business"}
-                  className={`${inputClasses} flex-1 py-3 text-[1rem]`}
+                  rows={Math.min(5, Math.max(2, texto.split("\n").length + (texto.length > 60 ? 1 : 0)))}
+                  placeholder={ouvindo ? "Ouvindo…" : "ex.: 54 na Amazon no Business, 30 no iFood e paguei 320 de luz da mãe"}
+                  className={`${inputClasses} flex-1 resize-none py-3 text-[1rem] leading-snug`}
                   disabled={interpretando}
                   autoComplete="off"
                 />
@@ -252,74 +296,123 @@ export function LancarRapido({ contas, cartoes, categorias, onFechar, onAjustar 
                   </button>
                 ))}
               </div>
+              <p className="type-caption text-ink-3">Enter interpreta; Shift+Enter quebra a linha. Ditando com o campo já preenchido, a frase é acrescentada ao lote.</p>
             </>
           ) : (
             <>
               <button type="button" onClick={outraFrase} className="type-caption self-start text-left text-ink-3 underline-offset-2 hover:text-ink hover:underline">
-                “{resultado.frase}” · outra frase
+                “{resultado.frase.length > 90 ? `${resultado.frase.slice(0, 90)}…` : resultado.frase}” · outra frase
               </button>
+              {resultado.itens.length > 1 && (
+                <p className="type-caption text-ink-2">
+                  {resultado.itens.length} lançamentos encontrados. Desmarque o que não quiser salvar agora.
+                </p>
+              )}
 
-              <div className="flex flex-col gap-4 rounded-md border border-hairline bg-surface p-5">
-                <div>
-                  <p className="type-eyebrow text-ink-3">{e!.tipo === "Saida" ? "Saída" : e!.tipo === "Entrada" ? "Entrada" : "Transferência"}</p>
-                  <p className="type-headline mt-1 text-ink">{e!.nomeInput || "Sem nome"}</p>
-                  <p className="type-display figures mt-1 text-ink">{valorResumo}</p>
-                </div>
-                <div className="rule-ledger" aria-hidden="true" />
-                <dl className="flex flex-col gap-2.5">
-                  {transferencia ? (
-                    <>
-                      <Linha label="De" value={contas.find((c) => c.id === e!.deContaId)?.nome ?? null} />
-                      <Linha label="Para" value={contas.find((c) => c.id === e!.paraContaId)?.nome ?? null} />
-                    </>
-                  ) : (
-                    <>
-                      {e!.tipo === "Saida" && <Linha label="Método" value={e!.modo === "Credito" ? "Crédito" : "Débito"} />}
-                      <Linha label={e!.tipo === "Saida" && e!.modo === "Credito" ? "Cartão" : "Conta"} value={nomeDestino} />
-                      {e!.tipo === "Saida" && <Linha label="Categoria" value={nomeCategoria} />}
-                      <Linha label="Status" value={e!.tipo === "Entrada" ? (e!.statusEntrada === "Recebido" ? "Recebido" : "A receber") : e!.statusSaida} />
-                      {parcelamento && <Linha label="Parcelamento" value={parcelamento} />}
-                      {permiteRecorrente(e!) && e!.recorrente && (
-                        <Linha label={e!.tipo === "Saida" ? "Conta fixa" : "Recorrência"} value={e!.tipo === "Saida" ? "Mensal, sem prazo" : "Próximos 12 meses"} />
-                      )}
-                    </>
-                  )}
-                  <Linha label={e!.tipo === "Saida" && e!.modo === "Credito" ? "Data da compra" : "Data"} value={formatDataBR(e!.dataInput)} />
-                </dl>
-              </div>
+              <ul className="flex flex-col gap-3">
+                {resultado.itens.map((it) => {
+                  const { estado: e, lancamento: l } = it;
+                  const motivo = motivoSemSalvar(it);
+                  const pct = Math.round(l.confianca * 100);
+                  let valor = "R$ 0,00";
+                  try {
+                    valor = formatCentsToBRL(parseCentsFromBRL(e.valorInput));
+                  } catch {
+                    /* mantém zero */
+                  }
+                  const credito = e.tipo === "Saida" && e.modo === "Credito";
+                  const detalhes: string[] = [];
+                  if (e.tipo === "Transferencia") {
+                    detalhes.push(`${contas.find((c) => c.id === e.deContaId)?.nome ?? "?"} → ${contas.find((c) => c.id === e.paraContaId)?.nome ?? "?"}`);
+                  } else {
+                    if (e.tipo === "Saida") detalhes.push(credito ? "Crédito" : "Débito");
+                    detalhes.push(nomeDestino(e) ?? (credito ? "cartão?" : "conta?"));
+                    if (e.tipo === "Saida") detalhes.push(nomeCategoria(e) ?? "categoria?");
+                    detalhes.push(e.tipo === "Entrada" ? (e.statusEntrada === "Recebido" ? "Recebido" : "A receber") : e.statusSaida);
+                    if (e.formato === "Parcelado") detalhes.push(`${e.numeroParcelas}x`);
+                    if (permiteRecorrente(e) && e.recorrente) detalhes.push(e.tipo === "Saida" ? "conta fixa" : "recorrente");
+                  }
+                  detalhes.push(formatDataBR(e.dataInput));
+                  const faltando = pendenciasDoEstado(e);
+                  return (
+                    <li key={it.chave} className={`rounded-md border bg-surface p-4 ${it.salvo ? "border-hairline opacity-70" : it.selecionado ? "border-brand" : "border-hairline"}`}>
+                      <div className="flex items-start gap-3">
+                        {it.salvo ? (
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-tint text-on-brand-tint" aria-label="Salvo">
+                            <Check size={13} />
+                          </span>
+                        ) : motivo === null ? (
+                          <input
+                            type="checkbox"
+                            checked={it.selecionado}
+                            onChange={() => alternar(it.chave)}
+                            aria-label={`Salvar ${e.nomeInput}`}
+                            className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-brand)]"
+                          />
+                        ) : (
+                          <span className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <p className="truncate text-[0.9375rem] font-semibold text-ink">
+                              <span className="type-eyebrow mr-2 text-ink-3">{e.tipo === "Saida" ? "Saída" : e.tipo === "Entrada" ? "Entrada" : "Transf."}</span>
+                              {e.nomeInput || "Sem nome"}
+                            </p>
+                            <p className="figures shrink-0 text-[1.0625rem] font-semibold text-ink">{valor}</p>
+                          </div>
+                          <p className="type-caption mt-0.5 text-ink-2">
+                            {detalhes.map((d, i) => (
+                              <span key={i} className={d.endsWith("?") ? "text-warn" : ""}>
+                                {i > 0 && <span className="text-ink-3"> · </span>}
+                                {d.endsWith("?") ? `falta ${d.slice(0, -1)}` : d}
+                              </span>
+                            ))}
+                          </p>
+                          <p className={`type-caption mt-1 ${pct >= 60 ? "text-ink-3" : "text-warn"}`}>
+                            {it.origem === "local" ? "Pelo histórico, sem IA." : `${pct}% de confiança${l.duvidas.length > 0 ? `. ${l.duvidas.join(" ")}` : ""}`}
+                          </p>
+                          {motivo === "fixa-existente" && (
+                            <p className="type-caption mt-1.5 flex items-start gap-1.5 text-on-brand-tint">
+                              <Repeat size={13} className="mt-0.5 shrink-0" />
+                              <span>
+                                Já é uma conta fixa. Pague o mês em{" "}
+                                <Link href="/contas-fixas" onClick={onFechar} className="font-semibold underline underline-offset-2">
+                                  Contas fixas
+                                </Link>
+                                , sem duplicar.
+                              </span>
+                            </p>
+                          )}
+                          {motivo === "fixa-nova" && <p className="type-caption mt-1.5 text-ink-3">Conta fixa nova é um contrato mensal: salve pelo formulário.</p>}
+                          {motivo === "transferencia" && <p className="type-caption mt-1.5 text-ink-3">Transferência passa pelo formulário para confirmar as duas contas.</p>}
+                          {motivo === "pendencia" && <p className="type-caption mt-1.5 text-warn">Falta {faltando.join(" e ")}: ajuste no formulário.</p>}
+                          {it.erro && <p className="type-caption mt-1.5 text-neg">{it.erro}</p>}
+                          {!it.salvo && motivo !== "fixa-existente" && (
+                            <button
+                              type="button"
+                              onClick={() => onAjustar(l)}
+                              className="type-caption mt-2 font-semibold text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+                            >
+                              Ajustar no formulário
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
 
-              <p className={`type-caption ${pct >= 60 ? "text-ink-2" : "text-warn"}`}>
-                {pct}% de confiança.{l!.duvidas.length > 0 ? ` ${l!.duvidas.join(" ")}` : ""}
-              </p>
               {erro && <p className="type-body rounded-sm bg-neg-tint px-4 py-3 text-on-neg-tint">{erro}</p>}
 
-              {fixaExistente ? (
-                <div className="flex items-start gap-2 rounded-sm bg-brand-tint px-4 py-3 text-on-brand-tint">
-                  <Repeat size={15} className="mt-0.5 shrink-0" />
-                  <p className="type-body">
-                    “{e!.nomeInput}” já é uma conta fixa. Para registrar o pagamento do mês sem duplicar, use{" "}
-                    <Link href="/contas-fixas" onClick={onFechar} className="font-semibold underline underline-offset-2">
-                      Contas fixas
-                    </Link>
-                    .
-                  </p>
-                </div>
-              ) : fixaNova ? (
-                <p className="type-caption text-ink-3">Conta fixa nova é um contrato mensal: confira e salve pelo formulário.</p>
-              ) : transferencia ? (
-                <p className="type-caption text-ink-3">Transferências passam pelo formulário para você confirmar as duas contas.</p>
-              ) : pendencias.length > 0 ? (
-                <p className="type-caption text-warn">Falta {pendencias.join(" e ")}. Ajuste no formulário para salvar.</p>
-              ) : null}
-
               <div className="flex flex-col gap-2 sm:flex-row-reverse">
-                {salvaDireto && (
-                  <Button type="button" onClick={() => void salvar()} disabled={salvando || pendencias.length > 0} className="flex-1 py-3">
-                    {salvando ? "Salvando…" : "Salvar"}
+                {podeSelecionar && (
+                  <Button type="button" onClick={() => void salvarSelecionados()} disabled={salvando || selecionados === 0} className="flex-1 py-3">
+                    {salvando ? "Salvando…" : selecionados <= 1 ? "Salvar" : `Salvar ${selecionados}`}
                   </Button>
                 )}
-                <Button type="button" variant="outline" onClick={() => onAjustar(resultado.lancamento)} className="flex-1 py-3">
-                  Ajustar no formulário
+                <Button type="button" variant="outline" onClick={outraFrase} className="flex-1 py-3">
+                  Outra frase
                 </Button>
               </div>
             </>

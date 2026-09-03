@@ -32,6 +32,12 @@ export const LancamentoInterpretadoSchema = z.object({
 
 export type LancamentoInterpretado = z.infer<typeof LancamentoInterpretadoSchema>;
 
+/** Uma frase pode trazer vários lançamentos ("54 na amazon, 30 no ifood e paguei a luz"). */
+export const LoteInterpretadoSchema = z.object({
+  lancamentos: z.array(LancamentoInterpretadoSchema).max(20),
+});
+export type LoteInterpretado = z.infer<typeof LoteInterpretadoSchema>;
+
 export interface CatalogoIA {
   pessoa: Pessoa;
   contas: Pick<Conta, "id" | "nome">[];
@@ -43,21 +49,41 @@ export interface CatalogoIA {
   contasFixas: string[];
 }
 
+/**
+ * Códigos curtos no lugar dos uuids (C1 = conta, K1 = cartão, G1 = categoria).
+ * A IA escreve 2 tokens em vez de ~25 por id — a resposta fica ~30% menor e
+ * mais rápida — e `saneiaInterpretacao` traduz de volta para os ids reais.
+ */
+export function codigosDoCatalogo(catalogo: CatalogoIA): { codigoDe: Map<string, string>; idDe: Map<string, string> } {
+  const codigoDe = new Map<string, string>();
+  const idDe = new Map<string, string>();
+  const registrar = (xs: { id: string }[], prefixo: string) =>
+    xs.forEach((x, i) => {
+      codigoDe.set(x.id, `${prefixo}${i + 1}`);
+      idDe.set(`${prefixo}${i + 1}`, x.id);
+    });
+  registrar(catalogo.contas, "C");
+  registrar(catalogo.cartoes, "K");
+  registrar(catalogo.categorias, "G");
+  return { codigoDe, idDe };
+}
+
 /** Parte estável do prompt (vai para o cache): regras + catálogo. */
 export function systemPromptInterpretar(catalogo: CatalogoIA): string {
-  const lista = (xs: { id: string; nome: string }[]) => xs.map((x) => `- ${x.nome} (id ${x.id})`).join("\n") || "- (nenhum)";
+  const { codigoDe } = codigosDoCatalogo(catalogo);
+  const lista = (xs: { id: string; nome: string }[]) => xs.map((x) => `- ${codigoDe.get(x.id)} = ${x.nome}`).join("\n") || "- (nenhum)";
   const hist = catalogo.historico
     .slice(0, 120)
     .map((h) => `- "${h.nome}" → ${h.categoria ?? "sem categoria"} · ${h.metodo}${h.destino ? ` · ${h.destino}` : ""}`)
     .join("\n");
-  return `Você interpreta frases curtas em português sobre gastos e receitas de um casal e as transforma em um lançamento estruturado para o app Budget OS. A pessoa ativa é ${catalogo.pessoa}. Nunca invente ids: use somente os do catálogo. Quando algo não estiver claro, escolha o mais provável, reduza a confiança e explique em "duvidas".
+  return `Você interpreta frases em português sobre gastos e receitas de um casal e as transforma em lançamentos estruturados para o app Budget OS. A frase pode trazer UM ou VÁRIOS lançamentos (separados por vírgula, "e", ponto ou quebra de linha): devolva um item por lançamento, na ordem em que aparecem, sem juntar nem repetir. Contexto compartilhado vale para os itens seguintes ("no carbon: 54 amazon e 30 ifood" = dois itens no cartão Carbon). A pessoa ativa é ${catalogo.pessoa}. Contas, cartões e categorias são referidos pelos CÓDIGOS do catálogo (C1, K2, G3…): nunca invente códigos, use somente os listados. Quando algo não estiver claro, escolha o mais provável, reduza a confiança e explique em "duvidas".
 
 REGRAS
 - tipo: "Saida" para gasto/compra/pagamento; "Entrada" para receita/recebimento/salário/pix recebido; "Transferencia" quando move dinheiro entre duas contas da própria pessoa ("transferi", "mandei da X pra Y").
 - metodo: "Crédito" quando citar cartão, crédito, parcelas ou o nome de um cartão do catálogo; "Débito" para pix, débito, boleto, dinheiro ou quando citar uma conta. Entrada e transferência têm metodo null.
-- destino_id: id do CARTÃO quando metodo é Crédito; id da CONTA quando Débito ou Entrada. Se a frase não citar, use a conta/cartão mais provável pelo histórico do mesmo nome; se ainda assim não souber, escolha o primeiro do catálogo e registre a dúvida.
-- de_conta_id / para_conta_id: só em transferência (ids de contas). Fora disso, null.
-- categoria_id: a mais adequada do catálogo, preferindo a que o histórico usa para o mesmo nome. Entrada e transferência: null.
+- destino_id: código do CARTÃO (K…) quando metodo é Crédito; código da CONTA (C…) quando Débito ou Entrada. Se a frase não citar, use a conta/cartão mais provável pelo histórico do mesmo nome; se ainda assim não souber, escolha o primeiro do catálogo e registre a dúvida.
+- de_conta_id / para_conta_id: só em transferência (códigos de contas). Fora disso, null.
+- categoria_id: código da categoria (G…) mais adequada, preferindo a que o histórico usa para o mesmo nome. Entrada e transferência: null.
 - valor_cents: inteiro em centavos. "54" = 5400; "1.234,56" = 123456; "R$ 12,9" = 1290.
 - data: ISO (AAAA-MM-DD). "hoje" e frases sem data = a data de hoje informada na mensagem; "ontem" = um dia antes; "dia 15" = dia 15 do mês corrente (ou do anterior se ainda não chegou e a frase for no passado).
 - status: saída "Pago" se a frase indica que já pagou ("paguei", "pago", "comprei" no débito), senão "A pagar"; entrada "Recebido" se "recebi/caiu/entrou", senão "Não recebido". Compra no crédito é sempre "A pagar" (a fatura é que se paga).
@@ -66,6 +92,7 @@ REGRAS
 - conta_fixa: true só para uma conta fixa NOVA, quando a frase indica recorrência mensal ("todo mês", "mensal", "assinatura", "aluguel", "condomínio") e não há conta fixa existente equivalente; senão false.
 - nome: curto e capitalizado como no histórico quando existir ("Amazon", "Enel mãe"); sem valor e sem data no nome.
 - confianca: 0 a 1. Abaixo de 0,6 significa que a pessoa precisa revisar antes de salvar.
+- duvidas: no máximo 2, cada uma com até 12 palavras, só o que a pessoa precisa conferir. Sem dúvidas quando tudo veio explícito ou do histórico.
 
 CATÁLOGO DE ${catalogo.pessoa.toUpperCase()}
 Contas:
@@ -91,6 +118,10 @@ export function saneiaInterpretacao(l: LancamentoInterpretado, catalogo: Catalog
   const contas = new Set(catalogo.contas.map((c) => c.id));
   const cartoes = new Set(catalogo.cartoes.map((c) => c.id));
   const categorias = new Set(catalogo.categorias.map((c) => c.id));
+  // Aceita código curto (K1) ou id real; o que não for nenhum dos dois cai nas validações abaixo.
+  const { idDe } = codigosDoCatalogo(catalogo);
+  const real = (v: string | null) => (v ? idDe.get(v) ?? v : null);
+  l = { ...l, destino_id: real(l.destino_id), de_conta_id: real(l.de_conta_id), para_conta_id: real(l.para_conta_id), categoria_id: real(l.categoria_id) };
   const duvidas = [...l.duvidas];
   let destino_id = l.destino_id;
   if (l.tipo === "Saida" && l.metodo === "Crédito" && destino_id && !cartoes.has(destino_id)) {
