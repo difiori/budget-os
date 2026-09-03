@@ -16,7 +16,7 @@ const ctx: ContextoLocal = {
     { nome: "Padaria", pessoa: "Diego", categoria_id: null, metodo: "Débito", conta_id: "c1", cartao_id: null, vezes: 4 },
     { nome: "Amazon", pessoa: "Vitor", categoria_id: "shop", metodo: "Crédito", conta_id: null, cartao_id: "k9", vezes: 15 },
   ],
-  contasFixas: ["Enel mãe"],
+  contasFixas: ["Enel mãe", "Enel Apartamento"],
 };
 
 describe("interpretarLocal", () => {
@@ -46,9 +46,17 @@ describe("interpretarLocal", () => {
     expect(interpretarLocal("amazon 54 dia 15", ctx)).toBeNull();
     expect(interpretarLocal("amazon", ctx)).toBeNull(); // sem valor
     expect(interpretarLocal("amazon 54 e 30", ctx)).toBeNull(); // dois valores
-    expect(interpretarLocal("320 enel mãe", ctx)).toBeNull(); // conta fixa existente
+    expect(interpretarLocal("enel 320", ctx)).toBeNull(); // duas contas fixas começam com "enel"
     expect(interpretarLocal("padaria 12", ctx)).toBeNull(); // histórico sem categoria
     expect(interpretarLocal("assinei amazon 54 todo mês", ctx)).toBeNull();
+  });
+});
+
+describe("conta fixa existente pelo nome", () => {
+  it("devolve o sinal de conta fixa existente em vez de gasto novo", () => {
+    expect(interpretarLocal("paguei 320 enel mãe", ctx)).toMatchObject({ nome: "Enel mãe", valor_cents: 32000, status: "Pago", conta_fixa_existente: true, conta_fixa: false, confianca: 1 });
+    expect(interpretarLocal("enel mã 320", ctx)?.conta_fixa_existente).toBe(true); // prefixo único
+    expect(interpretarLocal("enel mãe 320 em 3x", ctx)).toBeNull();
   });
 });
 

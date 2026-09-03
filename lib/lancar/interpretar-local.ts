@@ -116,6 +116,35 @@ export function interpretarLocal(frase: string, ctx: ContextoLocal): LancamentoI
   const nomeBusca = restantes.join(" ");
   if (nomeBusca.replace(/[^a-z]/g, "").length < 2) return null;
 
+  // Conta fixa existente pelo nome do contrato ("enel mãe 320"): não é gasto
+  // novo — devolve o sinal para o diálogo oferecer pagar o mês, sem IA.
+  // Prefixo que serve para mais de uma conta fixa ("enel") fica para a IA.
+  const itemFixa = (nomeContrato: string): LancamentoInterpretado | null =>
+    parcelas > 1
+      ? null
+      : {
+          tipo: "Saida",
+          nome: nomeContrato,
+          valor_cents,
+          metodo: null,
+          destino_id: citado?.id ?? null,
+          de_conta_id: null,
+          para_conta_id: null,
+          categoria_id: null,
+          data,
+          status: pago ? "Pago" : "A pagar",
+          parcelas: 1,
+          conta_fixa: false,
+          conta_fixa_existente: true,
+          confianca: 1,
+          duvidas: [],
+        };
+  const fixaExata = ctx.contasFixas.find((c) => normalizar(c) === nomeBusca);
+  if (fixaExata) return itemFixa(fixaExata);
+  const fixasPorPrefixo = nomeBusca.length >= 4 ? ctx.contasFixas.filter((c) => normalizar(c).startsWith(nomeBusca)) : [];
+  if (fixasPorPrefixo.length > 1) return null;
+  if (fixasPorPrefixo.length === 1 && !ctx.historico.some((h) => h.pessoa === ctx.pessoa && normalizar(h.nome) === nomeBusca)) return itemFixa(fixasPorPrefixo[0]);
+
   // Nome do histórico da pessoa: exato > começa com > contém; empate só se for o mesmo nome.
   const doHistorico = ctx.historico.filter((h) => h.pessoa === ctx.pessoa);
   const pontuar = (h: HistoricoLocal) => {
@@ -133,7 +162,9 @@ export function interpretarLocal(frase: string, ctx: ContextoLocal): LancamentoI
   const empate = candidatos.filter((c) => c.p === melhor.p && normalizar(c.h.nome) !== normalizar(melhor.h.nome));
   if (empate.length > 0 && melhor.p < 3) return null;
   const nome = melhor.h.nome;
-  if (ctx.contasFixas.some((c) => normalizar(c) === normalizar(nome))) return null;
+  // Histórico apontou para um nome que hoje é conta fixa: pagar o mês, não gasto novo.
+  const fixaDoHistorico = ctx.contasFixas.find((c) => normalizar(c) === normalizar(nome));
+  if (fixaDoHistorico) return itemFixa(fixaDoHistorico);
 
   const metodo: "Crédito" | "Débito" = citado ? (citado.tipo === "cartao" ? "Crédito" : "Débito") : melhor.h.metodo === "Crédito" ? "Crédito" : "Débito";
   const destino_id = citado ? citado.id : metodo === "Crédito" ? melhor.h.cartao_id : melhor.h.conta_id;

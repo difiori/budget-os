@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Mic, Repeat, Sparkles, Square, X } from "lucide-react";
 import { criarLancamento, type Sugestoes } from "@/app/(app)/lancar/actions";
+import { pagarContaFixaRapido, situacaoContaFixa, type SituacaoFixa } from "@/app/(app)/contas-fixas/rapido-actions";
 import { interpretarLancamentoIA } from "@/app/(app)/lancar/ia-actions";
 import type { LancamentoInterpretado } from "@/lib/ia/interpretar-lancamento";
 import { estadoDaInterpretacao, pendenciasDoEstado, formDataDoEstado, permiteRecorrente, type EstadoLancamento } from "@/lib/lancar/interpretacao";
@@ -61,6 +62,11 @@ interface Item {
   selecionado: boolean;
   salvo: boolean;
   erro: string | null;
+  /** Conta fixa existente: o que há no mês, para pagar/ajustar daqui. */
+  fixa?: SituacaoFixa | null;
+  fixaErro?: string | null;
+  /** Texto do que foi feito (ex.: "setembro: valor ajustado e marcada como paga"). */
+  feito?: string | null;
 }
 
 interface Props {
@@ -116,13 +122,44 @@ export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugesto
     return null;
   }
 
-  function montarItens(lancamentos: LancamentoInterpretado[], origem: Item["origem"]): Item[] {
+  async function montarItens(lancamentos: LancamentoInterpretado[], origem: Item["origem"]): Promise<Item[]> {
     const hoje = hojeISO();
-    return lancamentos.map((l, i) => {
+    const itens: Item[] = lancamentos.map((l, i) => {
       const estado = estadoDaInterpretacao(l, hoje);
       const semSalvar = motivoSemSalvar({ lancamento: l, estado });
       return { chave: `${Date.now()}-${i}`, origem, lancamento: l, estado, selecionado: semSalvar === null && l.confianca >= 0.6, salvo: false, erro: null };
     });
+    // Conta fixa existente: busca a ocorrência do mês para oferecer pagar/ajustar aqui mesmo.
+    await Promise.all(
+      itens
+        .filter((it) => it.lancamento.conta_fixa_existente)
+        .map(async (it) => {
+          const r = await situacaoContaFixa(it.lancamento.nome, it.estado.dataInput);
+          if (r.ok) it.fixa = r.situacao;
+          else it.fixaErro = r.error;
+        })
+    );
+    return itens;
+  }
+
+  async function agirNaFixa(it: Item, marcarPago: boolean) {
+    if (!it.fixa?.ocorrencia || salvando) return;
+    const valor = parseCentsFromBRL(it.estado.valorInput);
+    setSalvando(true);
+    const r = await pagarContaFixaRapido({ ocorrenciaId: it.fixa.ocorrencia.id, valorCents: valor, marcarPago });
+    setSalvando(false);
+    setResultado((res) =>
+      res && {
+        ...res,
+        itens: res.itens.map((x) =>
+          x.chave !== it.chave ? x : r.error ? { ...x, erro: r.error } : { ...x, salvo: true, erro: null, feito: `${it.fixa!.mesLabel}: ${r.resumo ?? "ok"}` }
+        ),
+      }
+    );
+    if (!r.error) {
+      setSalvos((n) => n + 1);
+      toast(`${it.fixa.nome} de ${it.fixa.mesLabel}: ${r.resumo ?? "ok"}.`);
+    }
   }
 
   async function interpretar(frase: string) {
@@ -140,19 +177,24 @@ export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugesto
         contasFixas: sugestoes.fixas,
       });
       if (local) {
-        setResultado({ frase: t, itens: montarItens(local, "local") });
+        if (local.some((l) => l.conta_fixa_existente)) setInterpretando(true);
+        const itens = await montarItens(local, "local");
+        setInterpretando(false);
+        setResultado({ frase: t, itens });
         return;
       }
     }
     // 2) IA para o resto: nomes novos, entradas, transferências, datas, contas fixas.
     setInterpretando(true);
     const r = await interpretarLancamentoIA(t);
-    setInterpretando(false);
     if (!r.ok) {
+      setInterpretando(false);
       setErro(r.error);
       return;
     }
-    setResultado({ frase: t, itens: montarItens(r.lancamentos, "ia") });
+    const itens = await montarItens(r.lancamentos, "ia");
+    setInterpretando(false);
+    setResultado({ frase: t, itens });
   }
 
   function alternarVoz() {
@@ -322,7 +364,9 @@ export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugesto
                   }
                   const credito = e.tipo === "Saida" && e.modo === "Credito";
                   const detalhes: string[] = [];
-                  if (e.tipo === "Transferencia") {
+                  if (motivo === "fixa-existente") {
+                    // O bloco da conta fixa já diz tudo; aqui só a data da frase.
+                  } else if (e.tipo === "Transferencia") {
                     detalhes.push(`${contas.find((c) => c.id === e.deContaId)?.nome ?? "?"} → ${contas.find((c) => c.id === e.paraContaId)?.nome ?? "?"}`);
                   } else {
                     if (e.tipo === "Saida") detalhes.push(credito ? "Crédito" : "Débito");
@@ -368,21 +412,15 @@ export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugesto
                               </span>
                             ))}
                           </p>
-                          <p className={`type-caption mt-1 ${pct >= 60 ? "text-ink-3" : "text-warn"}`}>
-                            {it.origem === "local" ? "Pelo histórico, sem IA." : `${pct}% de confiança${l.duvidas.length > 0 ? `. ${l.duvidas.join(" ")}` : ""}`}
-                          </p>
-                          {motivo === "fixa-existente" && (
-                            <p className="type-caption mt-1.5 flex items-start gap-1.5 text-on-brand-tint">
-                              <Repeat size={13} className="mt-0.5 shrink-0" />
-                              <span>
-                                Já é uma conta fixa. Pague o mês em{" "}
-                                <Link href="/contas-fixas" onClick={onFechar} className="font-semibold underline underline-offset-2">
-                                  Contas fixas
-                                </Link>
-                                , sem duplicar.
-                              </span>
+                          {motivo !== "fixa-existente" && (
+                            <p className={`type-caption mt-1 ${pct >= 60 ? "text-ink-3" : "text-warn"}`}>
+                              {it.origem === "local" ? "Pelo histórico, sem IA." : `${pct}% de confiança${l.duvidas.length > 0 ? `. ${l.duvidas.join(" ")}` : ""}`}
                             </p>
                           )}
+                          {motivo === "fixa-existente" && !it.salvo && (
+                            <FixaNoMes item={it} ocupado={salvando} onAgir={(pago) => void agirNaFixa(it, pago)} onFechar={onFechar} />
+                          )}
+                          {it.salvo && it.feito && <p className="type-caption mt-1.5 text-on-brand-tint">{it.feito}</p>}
                           {motivo === "fixa-nova" && <p className="type-caption mt-1.5 text-ink-3">Conta fixa nova é um contrato mensal: salve pelo formulário.</p>}
                           {motivo === "transferencia" && <p className="type-caption mt-1.5 text-ink-3">Transferência passa pelo formulário para confirmar as duas contas.</p>}
                           {motivo === "pendencia" && <p className="type-caption mt-1.5 text-warn">Falta {faltando.join(" e ")}: ajuste no formulário.</p>}
@@ -419,6 +457,67 @@ export function LancarRapido({ contas, cartoes, categorias, pessoaAtiva, sugesto
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bloco de uma conta fixa existente dentro do item: mostra o mês (previsto,
+ * real, status ou fatura) e as ações possíveis — pagar com o valor da frase,
+ * só ajustar o valor, ou ir para Contas fixas quando não há o que fazer aqui.
+ */
+function FixaNoMes({ item, ocupado, onAgir, onFechar }: { item: Item; ocupado: boolean; onAgir: (marcarPago: boolean) => void; onFechar: () => void }) {
+  const f = item.fixa;
+  let valorFrase = 0;
+  try {
+    valorFrase = parseCentsFromBRL(item.estado.valorInput);
+  } catch {
+    /* sem valor válido: só link */
+  }
+  const linkFixas = (
+    <Link href="/contas-fixas" onClick={onFechar} className="font-semibold underline underline-offset-2">
+      Contas fixas
+    </Link>
+  );
+  if (!f) {
+    return (
+      <p className="type-caption mt-1.5 flex items-start gap-1.5 text-on-brand-tint">
+        <Repeat size={13} className="mt-0.5 shrink-0" />
+        <span>
+          Já é uma conta fixa. {item.fixaErro ? `${item.fixaErro} ` : ""}Veja em {linkFixas}.
+        </span>
+      </p>
+    );
+  }
+  const oc = f.ocorrencia;
+  const difere = !!oc && valorFrase > 0 && valorFrase !== oc.totalCents;
+  const credito = f.metodo === "Crédito";
+  const disseQuePagou = item.estado.statusSaida === "Pago";
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-sm bg-brand-tint px-3 py-2.5 text-on-brand-tint">
+      <p className="type-caption flex items-start gap-1.5">
+        <Repeat size={13} className="mt-0.5 shrink-0" />
+        <span>
+          Conta fixa · {f.mesLabel}: previsto {formatCentsToBRL(f.previstoCents)}
+          {oc ? ` · no mês ${formatCentsToBRL(oc.totalCents)} · ${credito ? f.faturaLabel ?? "na fatura" : oc.status === "Pago" ? "já paga" : "a pagar"}` : " · mês ainda sem ocorrência"}
+        </span>
+      </p>
+      {oc && (
+        <div className="flex flex-wrap gap-1.5">
+          {!credito && oc.status !== "Pago" && (
+            <Button type="button" onClick={() => onAgir(true)} disabled={ocupado} className="px-3 py-1.5">
+              {ocupado ? "Salvando…" : `Pagar ${formatCentsToBRL(valorFrase > 0 ? valorFrase : oc.totalCents)}`}
+            </Button>
+          )}
+          {difere && (
+            <Button type="button" variant="outline" onClick={() => onAgir(false)} disabled={ocupado} className="px-3 py-1.5">
+              {credito || oc.status === "Pago" ? `Ajustar para ${formatCentsToBRL(valorFrase)}` : "Só ajustar o valor"}
+            </Button>
+          )}
+          {!credito && oc.status === "Pago" && !difere && disseQuePagou && <span className="type-caption self-center">Nada a fazer: já estava paga com esse valor.</span>}
+        </div>
+      )}
+      <p className="type-caption">Detalhes em {linkFixas}.</p>
     </div>
   );
 }
