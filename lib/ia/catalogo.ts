@@ -11,7 +11,7 @@ import type { CatalogoIA } from "./interpretar-lancamento";
  * (app) ou o administrativo (API dos Atalhos).
  */
 export async function montarCatalogoIA(supabase: SupabaseClient, pessoa: Pessoa): Promise<CatalogoIA> {
-  const [{ data: contas }, { data: cartoes }, { data: categorias }, { data: saidas }] = await Promise.all([
+  const [{ data: contas }, { data: cartoes }, { data: categorias }, { data: saidas }, { data: fixas }] = await Promise.all([
     supabase.from("conta").select("id, nome, dono").eq("dono", pessoa).order("nome"),
     supabase.from("cartao").select("id, nome, dono").eq("dono", pessoa).order("nome"),
     supabase.from("categoria").select("id, nome, dono").order("nome"),
@@ -21,7 +21,12 @@ export async function montarCatalogoIA(supabase: SupabaseClient, pessoa: Pessoa)
       .eq("pessoa", pessoa)
       .order("created_at", { ascending: false })
       .limit(500),
+    supabase.from("recorrente").select("nome, ativo, fim").eq("pessoa", pessoa).order("nome"),
   ]);
+  const hojeISO = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const contasFixas = ((fixas ?? []) as { nome: string; ativo: boolean; fim: string | null }[])
+    .filter((f) => f.ativo && (!f.fim || f.fim >= hojeISO))
+    .map((f) => f.nome);
 
   const listaContas = (contas ?? []) as { id: string; nome: string }[];
   const listaCartoes = (cartoes ?? []) as { id: string; nome: string }[];
@@ -65,5 +70,6 @@ export async function montarCatalogoIA(supabase: SupabaseClient, pessoa: Pessoa)
     cartoes: listaCartoes,
     categorias: listaCategorias.map((c) => ({ id: c.id, nome: c.nome })),
     historico,
+    contasFixas,
   };
 }

@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { LancarForm } from "@/app/(app)/lancar/lancar-form";
 import { carregarSugestoes, type Sugestoes } from "@/app/(app)/lancar/actions";
+import type { LancamentoInterpretado } from "@/lib/ia/interpretar-lancamento";
+import { LancarRapido } from "./lancar-rapido";
 import type { Cartao, Categoria, Conta, Pessoa } from "@/lib/domain/types";
 
 interface LancarCtx {
-  abrir: () => void;
-  /** Se o overlay de Lançar está aberto — a calculadora usa pra sair da
+  /** Abre o formulário completo (vazio ou já preenchido por uma interpretação). */
+  abrir: (interpretacao?: LancamentoInterpretado) => void;
+  /** Abre o "Lançar rápido" (frase/voz → IA → recibo → salvar). */
+  abrirRapido: () => void;
+  /** Só faz sentido com ANTHROPIC_API_KEY no servidor. */
+  iaDisponivel: boolean;
+  /** Se algum overlay de Lançar está aberto — a calculadora usa pra sair da
    * frente do botão "Salvar" no mobile. */
   aberto: boolean;
 }
@@ -46,6 +53,9 @@ export function LancarProvider({
   children: ReactNode;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [rapidoAberto, setRapidoAberto] = useState(false);
+  // Interpretação que abriu o formulário; muda a key para o form nascer preenchido.
+  const [inicial, setInicial] = useState<{ n: number; l: LancamentoInterpretado | null }>({ n: 0, l: null });
   const [sugestoes, setSugestoes] = useState<Sugestoes | null>(null);
   const router = useRouter();
 
@@ -66,14 +76,28 @@ export function LancarProvider({
     };
   }, [aberto, sugestoes]);
 
+  function abrir(interpretacao?: LancamentoInterpretado) {
+    setInicial((a) => ({ n: a.n + 1, l: interpretacao ?? null }));
+    setRapidoAberto(false);
+    setAberto(true);
+  }
+
   function fechar() {
     setAberto(false);
     router.refresh();
   }
 
+  function fecharRapido() {
+    setRapidoAberto(false);
+    router.refresh();
+  }
+
   return (
-    <Ctx.Provider value={{ abrir: () => setAberto(true), aberto }}>
+    <Ctx.Provider value={{ abrir, abrirRapido: () => setRapidoAberto(true), iaDisponivel, aberto: aberto || rapidoAberto }}>
       {children}
+      {rapidoAberto && iaDisponivel && (
+        <LancarRapido contas={contas} cartoes={cartoes} categorias={categorias} onFechar={fecharRapido} onAjustar={abrir} />
+      )}
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
           <div className="absolute inset-0 bg-scrim" onClick={fechar} aria-hidden="true" />
@@ -98,7 +122,15 @@ export function LancarProvider({
               className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
-              <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} sugestoes={sugestoes} iaDisponivel={iaDisponivel} />
+              <LancarForm
+                key={inicial.n}
+                contas={contas}
+                cartoes={cartoes}
+                categorias={categorias}
+                pessoaAtiva={pessoaAtiva}
+                sugestoes={sugestoes}
+                interpretacaoInicial={inicial.l}
+              />
             </div>
           </div>
         </div>

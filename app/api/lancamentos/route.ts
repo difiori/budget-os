@@ -79,6 +79,8 @@ export async function POST(request: Request) {
     if (!r.ok) return erro(422, r.error);
     const l = r.lancamento;
     if (l.tipo === "Transferencia") return erro(422, "Transferência entre contas: faça pelo app.");
+    if (l.conta_fixa_existente) return erro(422, `"${l.nome}" já é uma conta fixa: registre o pagamento do mês em Contas fixas.`);
+    if (l.conta_fixa) return erro(422, "Conta fixa nova é um contrato mensal: cadastre pelo app.");
     if (l.confianca < 0.6) {
       return Response.json(
         { ok: false, precisa_revisar: true, interpretacao: l, error: `Não tive certeza: ${l.duvidas.join(" ") || "confira no app."}` },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Repeat, Settings, Tags } from "lucide-react";
+import { CalendarRange, CreditCard, Landmark, LayoutDashboard, Receipt, Repeat, Settings, Sparkles, Tags } from "lucide-react";
 import type { ComponentType } from "react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AccountSwitcher } from "@/components/account-switcher";
@@ -30,7 +30,7 @@ const ITEMS: NavItem[] = [
 export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const { abrir } = useLancar();
+  const { abrir, abrirRapido, iaDisponivel } = useLancar();
   // O mês em foco acompanha a navegação: se a URL atual tem ano/mês, os links
   // do menu levam para o mesmo mês (Configurações não tem recorte mensal).
   const ano = params.get("ano");
@@ -48,11 +48,21 @@ export function Sidebar({ contaAtiva }: { contaAtiva: Pessoa }) {
 
       <button
         type="button"
-        onClick={abrir}
-        className="mb-4 flex items-center justify-center rounded-sm bg-brand px-3 py-2.5 font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+        onClick={() => abrir()}
+        className={`flex items-center justify-center rounded-sm bg-brand px-3 py-2.5 font-semibold text-on-brand transition-colors hover:bg-brand-hover ${iaDisponivel ? "mb-2" : "mb-4"}`}
       >
         <span className="type-label">Novo lançamento</span>
       </button>
+      {iaDisponivel && (
+        <button
+          type="button"
+          onClick={abrirRapido}
+          className="mb-4 flex items-center justify-center gap-2 rounded-sm border border-hairline-strong bg-surface px-3 py-2.5 font-semibold text-ink transition-colors hover:border-ink-3"
+        >
+          <Sparkles size={15} className="text-brand" />
+          <span className="type-label">Lançar rápido</span>
+        </button>
+      )}
 
       <nav className="flex flex-1 flex-col gap-0.5">
         {ITEMS.map((item) => {

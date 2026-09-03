@@ -14,6 +14,7 @@ const catalogo: CatalogoIA = {
   cartoes: [{ id: "k1", nome: "C6 Business Mastercard" }],
   categorias: [{ id: "g", nome: "Gastos Diversos" }],
   historico: [{ nome: "Amazon", categoria: "Gastos Diversos", metodo: "Crédito", destino: "C6 Business Mastercard" }],
+  contasFixas: ["Enel mãe", "Condomínio"],
 };
 
 const base: LancamentoInterpretado = {
@@ -29,6 +30,7 @@ const base: LancamentoInterpretado = {
   status: "A pagar",
   parcelas: 1,
   conta_fixa: false,
+  conta_fixa_existente: false,
   confianca: 0.9,
   duvidas: [],
 };

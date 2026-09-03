@@ -24,6 +24,8 @@ export const LancamentoInterpretadoSchema = z.object({
   status: z.enum(["Pago", "A pagar", "Recebido", "Não recebido"]),
   parcelas: z.number().int(),
   conta_fixa: z.boolean(),
+  /** A frase se refere a uma conta fixa que JÁ existe (o mês se paga em Contas fixas, não vira lançamento novo). */
+  conta_fixa_existente: z.boolean(),
   confianca: z.number(),
   duvidas: z.array(z.string()),
 });
@@ -37,6 +39,8 @@ export interface CatalogoIA {
   categorias: Pick<Categoria, "id" | "nome">[];
   /** Nomes já usados com a categoria/método/destino mais recentes — guia a IA. */
   historico: { nome: string; categoria: string | null; metodo: string; destino: string | null }[];
+  /** Contas fixas ativas da pessoa — para a IA reconhecer "paguei a luz da mãe" como pagamento de algo que já existe. */
+  contasFixas: string[];
 }
 
 /** Parte estável do prompt (vai para o cache): regras + catálogo. */
@@ -58,7 +62,8 @@ REGRAS
 - data: ISO (AAAA-MM-DD). "hoje" e frases sem data = a data de hoje informada na mensagem; "ontem" = um dia antes; "dia 15" = dia 15 do mês corrente (ou do anterior se ainda não chegou e a frase for no passado).
 - status: saída "Pago" se a frase indica que já pagou ("paguei", "pago", "comprei" no débito), senão "A pagar"; entrada "Recebido" se "recebi/caiu/entrou", senão "Não recebido". Compra no crédito é sempre "A pagar" (a fatura é que se paga).
 - parcelas: 1 à vista; "em 12x", "12 vezes", "parcelado em 10" → o número.
-- conta_fixa: true quando a frase indica recorrência mensal ("todo mês", "mensal", "assinatura", "aluguel", "condomínio", "conta de luz"), senão false.
+- conta_fixa_existente: true quando a frase se refere a uma das CONTAS FIXAS EXISTENTES abaixo (ex.: "paguei a luz da mãe" quando existe "Enel mãe"). Nesse caso use o nome dela, preencha o resto normalmente e deixe conta_fixa false — o pagamento do mês é feito na tela Contas fixas, não como lançamento novo.
+- conta_fixa: true só para uma conta fixa NOVA, quando a frase indica recorrência mensal ("todo mês", "mensal", "assinatura", "aluguel", "condomínio") e não há conta fixa existente equivalente; senão false.
 - nome: curto e capitalizado como no histórico quando existir ("Amazon", "Enel mãe"); sem valor e sem data no nome.
 - confianca: 0 a 1. Abaixo de 0,6 significa que a pessoa precisa revisar antes de salvar.
 
@@ -69,6 +74,9 @@ Cartões:
 ${lista(catalogo.cartoes)}
 Categorias:
 ${lista(catalogo.categorias)}
+
+CONTAS FIXAS EXISTENTES (já cadastradas; pagamento do mês não é lançamento novo)
+${catalogo.contasFixas.map((n) => `- ${n}`).join("\n") || "- (nenhuma)"}
 
 HISTÓRICO (nome → categoria · método · conta/cartão mais recentes)
 ${hist || "- (sem histórico)"}`;
@@ -104,6 +112,8 @@ export function saneiaInterpretacao(l: LancamentoInterpretado, catalogo: Catalog
   if (!dataOk) duvidas.push("Não entendi a data; confira.");
   return {
     ...l,
+    // Conta fixa existente nunca vira contrato novo, mesmo que a IA marque os dois.
+    conta_fixa: l.conta_fixa_existente ? false : l.conta_fixa,
     destino_id,
     categoria_id,
     de_conta_id,

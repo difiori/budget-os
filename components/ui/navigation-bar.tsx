@@ -13,6 +13,7 @@ import {
   Receipt,
   Repeat,
   Settings,
+  Sparkles,
   Tags,
   X,
 } from "lucide-react";
@@ -60,7 +61,7 @@ function TabLink({ item, active, href }: { item: Item; active: boolean; href: st
 export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
   const pathname = usePathname();
   const params = useSearchParams();
-  const { abrir } = useLancar();
+  const { abrir, abrirRapido, iaDisponivel } = useLancar();
   const ano = params.get("ano");
   const mes = params.get("mes");
   const comMes = (href: string) => (ano && mes && href !== "/config" ? `${href}?ano=${ano}&mes=${mes}` : href);
@@ -125,7 +126,9 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
       )}
 
       <nav
-        className="glass fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-center md:hidden"
+        // Com "Rápido" ao lado, o ＋ ocupa duas colunas de sete para seguir
+        // exatamente no centro da barra.
+        className={`glass fixed inset-x-0 bottom-0 z-20 grid items-center md:hidden ${iaDisponivel ? "grid-cols-7" : "grid-cols-5"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {ESQUERDA.map((item) => (
@@ -133,16 +136,29 @@ export function NavigationBar({ contaAtiva }: { contaAtiva: Pessoa }) {
         ))}
 
         {/* ＋ Lançar — ação central, em destaque */}
-        <div className="flex items-center justify-center">
+        <div className={`flex items-center justify-center ${iaDisponivel ? "col-span-2" : ""}`}>
           <button
             type="button"
-            onClick={abrir}
+            onClick={() => abrir()}
             aria-label="Novo lançamento"
             className="glow-brand -mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-brand transition-transform active:scale-95"
           >
             <Plus size={24} strokeWidth={2.4} />
           </button>
         </div>
+
+        {/* ✦ Lançar rápido — frase ou voz, ao lado do ＋ */}
+        {iaDisponivel && (
+          <button
+            type="button"
+            onClick={abrirRapido}
+            aria-label="Lançar rápido"
+            className="flex flex-col items-center gap-1 pb-2 pt-2.5 text-ink-3 transition-colors active:text-ink"
+          >
+            <Sparkles size={20} strokeWidth={1.7} />
+            <span className="text-[0.625rem] font-medium leading-none">Rápido</span>
+          </button>
+        )}
 
         {DIREITA.map((item) => (
           <TabLink key={item.href} item={item} active={pathname === item.href} href={comMes(item.href)} />
