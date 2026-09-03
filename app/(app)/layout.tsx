@@ -36,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           cartoes={(cartoes ?? []) as Cartao[]}
           categorias={(categorias ?? []) as Categoria[]}
           pessoaAtiva={contaAtiva}
+          iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
         >
           <div className="flex min-h-full flex-1">
             <Sidebar contaAtiva={contaAtiva} />

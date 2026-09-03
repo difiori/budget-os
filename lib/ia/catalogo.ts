@@ -1,0 +1,69 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { categoriasParaPessoa } from "@/lib/domain/categoria";
+import { nomeSemParcela } from "@/lib/domain/parcelamento";
+import type { Categoria, Pessoa } from "@/lib/domain/types";
+import type { CatalogoIA } from "./interpretar-lancamento";
+
+/**
+ * Monta o catálogo que a IA pode usar para uma pessoa: contas e cartões dela,
+ * categorias dela ou de ambos, e o histórico de nomes (1 por nome, o mais
+ * recente) com categoria/método/destino. Funciona com o cliente de sessão
+ * (app) ou o administrativo (API dos Atalhos).
+ */
+export async function montarCatalogoIA(supabase: SupabaseClient, pessoa: Pessoa): Promise<CatalogoIA> {
+  const [{ data: contas }, { data: cartoes }, { data: categorias }, { data: saidas }] = await Promise.all([
+    supabase.from("conta").select("id, nome, dono").eq("dono", pessoa).order("nome"),
+    supabase.from("cartao").select("id, nome, dono").eq("dono", pessoa).order("nome"),
+    supabase.from("categoria").select("id, nome, dono").order("nome"),
+    supabase
+      .from("saida")
+      .select("nome, metodo, categoria_id, conta_id, cartao_id, parcela, recorrente_id")
+      .eq("pessoa", pessoa)
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
+
+  const listaContas = (contas ?? []) as { id: string; nome: string }[];
+  const listaCartoes = (cartoes ?? []) as { id: string; nome: string }[];
+  const listaCategorias = categoriasParaPessoa((categorias ?? []) as Categoria[], pessoa);
+  const nomeConta = new Map(listaContas.map((c) => [c.id, c.nome]));
+  const nomeCartao = new Map(listaCartoes.map((c) => [c.id, c.nome]));
+  const nomeCategoria = new Map(listaCategorias.map((c) => [c.id, c.nome]));
+
+  const vistos = new Map<string, { nome: string; categoria: string | null; metodo: string; destino: string | null; vezes: number }>();
+  for (const s of (saidas ?? []) as {
+    nome: string;
+    metodo: string;
+    categoria_id: string | null;
+    conta_id: string | null;
+    cartao_id: string | null;
+    parcela: string | null;
+    recorrente_id: string | null;
+  }[]) {
+    if (s.recorrente_id) continue;
+    const nome = nomeSemParcela(s.nome, s.parcela).trim();
+    if (!nome) continue;
+    const k = nome.toLowerCase();
+    const atual = vistos.get(k);
+    if (atual) {
+      atual.vezes += 1;
+      continue;
+    }
+    vistos.set(k, {
+      nome,
+      categoria: s.categoria_id ? nomeCategoria.get(s.categoria_id) ?? null : null,
+      metodo: s.metodo,
+      destino: s.metodo === "Crédito" ? nomeCartao.get(s.cartao_id ?? "") ?? null : nomeConta.get(s.conta_id ?? "") ?? null,
+      vezes: 1,
+    });
+  }
+  const historico = [...vistos.values()].sort((a, b) => b.vezes - a.vezes).slice(0, 120);
+
+  return {
+    pessoa,
+    contas: listaContas,
+    cartoes: listaCartoes,
+    categorias: listaCategorias.map((c) => ({ id: c.id, nome: c.nome })),
+    historico,
+  };
+}

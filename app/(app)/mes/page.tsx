@@ -23,6 +23,9 @@ import {
   type Variacao,
 } from "@/lib/domain/fechamento";
 import { formatCentsToBRL } from "@/lib/domain/money";
+import type { DadosFechamento } from "@/lib/ia/narrativa-fechamento";
+import { LeituraDoMes } from "./leitura-do-mes";
+import type { ContaFixa } from "@/lib/domain/types";
 import { labelMes, MESES_ABREV } from "@/lib/format/meses";
 import type { Categoria, Conta, Entrada, Saida } from "@/lib/domain/types";
 
@@ -70,7 +73,8 @@ export default async function MesPage({
 
   // Paginado (fetchAllRows): a tabela `saida` passa de 1000 linhas e o limite
   // padrão do PostgREST truncaria o saldo previsto por conta.
-  const [contasResp, saidasTodas, entradasTodas, categoriasResp, cartoesResp] = await Promise.all([
+  const mesISO = `${mesReferencia.year}-${String(mesReferencia.month).padStart(2, "0")}-01`;
+  const [contasResp, saidasTodas, entradasTodas, categoriasResp, cartoesResp, contratosResp, narrativaResp] = await Promise.all([
     contasQuery,
     fetchAllRows<Saida>((from, to) => {
       let q = supabase
@@ -90,6 +94,8 @@ export default async function MesPage({
     }),
     supabase.from("categoria").select("id, nome, dono").order("nome"),
     supabase.from("cartao").select("id, nome, conta_vinculada_id"),
+    supabase.from("recorrente").select("id, nome, total_cents, pessoa"),
+    supabase.from("fechamento_narrativa").select("texto, hash, gerado_em").eq("mes", mesISO).eq("escopo", pessoa).maybeSingle(),
   ]);
 
   const todasContas = (contasResp.data ?? []) as Conta[];
@@ -132,6 +138,47 @@ export default async function MesPage({
   const destino = (s: Saida) =>
     (s.metodo === "Débito" ? contaNome.get(s.conta_id ?? "") : cartaoNome.get(s.cartao_id ?? "")) ?? "—";
   const ddmm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—");
+
+  // Contas fixas que fugiram do previsto neste mês (só as do escopo).
+  const previstoPorContrato = new Map(
+    ((contratosResp.data ?? []) as Pick<ContaFixa, "id" | "nome" | "total_cents" | "pessoa">[])
+      .filter((c) => pessoa === "Casal" || c.pessoa === pessoa)
+      .map((c) => [c.id, c])
+  );
+  const fixasDivergentes = saidasMes
+    .filter((s) => s.recorrente_id && previstoPorContrato.has(s.recorrente_id))
+    .map((s) => {
+      const c = previstoPorContrato.get(s.recorrente_id!)!;
+      return { nome: c.nome, previsto: c.total_cents, real: s.total_cents };
+    })
+    .filter((d) => d.previsto !== d.real)
+    .sort((a, b) => Math.abs(b.real - b.previsto) - Math.abs(a.real - a.previsto))
+    .slice(0, 6);
+
+  const dadosFechamento: DadosFechamento = {
+    mesLabel: labelMes(mesReferencia),
+    mesAnteriorLabel: contra,
+    escopo: pessoa,
+    entradas: entradasTotal,
+    saidas: saidasTotal,
+    resultado,
+    entradasAnterior: entradasAntTotal,
+    saidasAnterior: saidasAntTotal,
+    resultadoAnterior: resultadoAnt,
+    taxaPoupancaPct: taxa === null ? null : Math.round(taxa * 10) / 10,
+    taxaPoupancaAnteriorPct: taxaAnt === null ? null : Math.round(taxaAnt * 10) / 10,
+    fixas: {
+      total: fv.fixas,
+      quantidade: fv.nFixas,
+      pctDasSaidas: Math.round(pctFixas),
+      pctDasEntradas: fixasSobreEntradas === null ? null : Math.round(fixasSobreEntradas),
+    },
+    variaveis: { total: fv.variaveis, quantidade: fv.nVariaveis },
+    categorias: linhasCategoria.slice(0, 12).map((l) => ({ nome: nomeCat(l.categoriaId), atual: l.atual, anterior: l.anterior })),
+    maioresSaidas: maiores.map((s) => ({ nome: s.nome, valor: s.total_cents, categoria: nomeCat(s.categoria_id), dia: ddmm(s.vencimento) })),
+    fixasDivergentes,
+  };
+  const narrativa = narrativaResp.data as { texto: string; hash: string; gerado_em: string } | null;
 
   const saldoPorConta = todasContas.map((conta) => ({
     conta,
@@ -190,6 +237,16 @@ export default async function MesPage({
           </div>
         </dl>
       </Card>
+
+      <section className="mt-5">
+        <LeituraDoMes
+          mesISO={mesISO}
+          escopo={pessoa}
+          dados={dadosFechamento}
+          existente={narrativa ? { texto: narrativa.texto, hash: narrativa.hash, geradoEm: narrativa.gerado_em } : null}
+          iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
+        />
+      </section>
 
       <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Fixas x variáveis */}

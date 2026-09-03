@@ -1,7 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { criarLancamento, type CriarLancamentoState, type Sugestoes } from "./actions";
+import { interpretarLancamentoIA } from "./ia-actions";
+import type { LancamentoInterpretado } from "@/lib/ia/interpretar-lancamento";
+import { Mic, Sparkles, Square } from "lucide-react";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
 import { addMonths, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
@@ -69,6 +72,135 @@ interface LancarFormProps {
   pessoaAtiva: Pessoa;
   /** Histórico para o autocompletar do nome (null enquanto carrega). */
   sugestoes?: Sugestoes | null;
+  /** Mostra o "Lançar rápido" (frase livre ou voz interpretada pela IA). */
+  iaDisponivel?: boolean;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Lançar rápido: frase livre ou voz → IA → formulário pré-preenchido        */
+/* ------------------------------------------------------------------------ */
+
+interface ReconhecimentoVoz {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+function criarReconhecimentoVoz(): ReconhecimentoVoz | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: new () => ReconhecimentoVoz;
+    webkitSpeechRecognition?: new () => ReconhecimentoVoz;
+  };
+  const Construtor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+  return Construtor ? new Construtor() : null;
+}
+
+function LancarRapido({ onInterpretado }: { onInterpretado: (l: LancamentoInterpretado) => void }) {
+  const [texto, setTexto] = useState("");
+  const [ouvindo, setOuvindo] = useState(false);
+  const [interpretando, setInterpretando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<LancamentoInterpretado | null>(null);
+  // Só renderiza no cliente (dentro do overlay), então dá para checar a API
+  // de voz do navegador já no estado inicial.
+  const [suportaVoz] = useState(() => criarReconhecimentoVoz() !== null);
+  const reconhecimento = useRef<ReconhecimentoVoz | null>(null);
+
+  async function interpretar(frase: string) {
+    const t = frase.trim();
+    if (!t) return;
+    setInterpretando(true);
+    setErro(null);
+    const r = await interpretarLancamentoIA(t);
+    setInterpretando(false);
+    if (!r.ok) {
+      setErro(r.error);
+      return;
+    }
+    setResultado(r.lancamento);
+    onInterpretado(r.lancamento);
+  }
+
+  function alternarVoz() {
+    if (ouvindo) {
+      reconhecimento.current?.stop();
+      return;
+    }
+    const rec = criarReconhecimentoVoz();
+    if (!rec) return;
+    rec.lang = "pt-BR";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      const frase = e.results[0]?.[0]?.transcript ?? "";
+      setTexto(frase);
+      void interpretar(frase);
+    };
+    rec.onerror = () => {
+      setOuvindo(false);
+      setErro("Não consegui ouvir. Tente de novo ou digite.");
+    };
+    rec.onend = () => setOuvindo(false);
+    reconhecimento.current = rec;
+    setOuvindo(true);
+    rec.start();
+  }
+
+  const pct = resultado ? Math.round(resultado.confianca * 100) : 0;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-hairline bg-bg p-3.5">
+      <div className="flex items-center gap-2">
+        <Sparkles size={14} className="text-brand" />
+        <p className="type-label text-ink">Lançar rápido</p>
+        <p className="type-caption text-ink-3">descreva em uma frase; a IA preenche e você confere</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void interpretar(texto);
+            }
+          }}
+          placeholder={ouvindo ? "Ouvindo…" : "ex.: 54 na Amazon no Business · paguei 320 de luz da mãe hoje"}
+          className={`${inputClasses} flex-1`}
+          disabled={interpretando}
+        />
+        {suportaVoz && (
+          <button
+            type="button"
+            onClick={alternarVoz}
+            aria-label={ouvindo ? "Parar de ouvir" : "Ditar"}
+            aria-pressed={ouvindo}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border transition-colors ${
+              ouvindo ? "border-transparent bg-neg text-white" : "border-hairline-strong bg-surface text-ink-2 hover:text-ink"
+            }`}
+          >
+            {ouvindo ? <Square size={14} /> : <Mic size={16} />}
+          </button>
+        )}
+        <Button type="button" variant="tonal" onClick={() => void interpretar(texto)} disabled={interpretando || !texto.trim()} className="shrink-0 px-3 py-2">
+          {interpretando ? "Interpretando…" : "Interpretar"}
+        </Button>
+      </div>
+      {erro && <p className="type-caption text-neg">{erro}</p>}
+      {resultado && !erro && (
+        <p className={`type-caption ${pct >= 60 ? "text-ink-2" : "text-warn"}`}>
+          Preenchido com {pct}% de confiança.{" "}
+          {resultado.duvidas.length > 0 ? `Confira: ${resultado.duvidas.join(" ")}` : "Confira os campos abaixo e salve."}
+        </p>
+      )}
+    </div>
+  );
 }
 
 interface SugestaoVisivel {
@@ -170,7 +302,7 @@ function NomeComSugestoes({
   );
 }
 
-export function LancarForm({ contas, cartoes, categorias, pessoaAtiva, sugestoes = null }: LancarFormProps) {
+export function LancarForm({ contas, cartoes, categorias, pessoaAtiva, sugestoes = null, iaDisponivel = false }: LancarFormProps) {
   const [state, formAction, isPending] = useActionState(criarLancamento, initialState);
 
   const [tipo, setTipo] = useState<Tipo>("Saida");
@@ -366,6 +498,37 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva, sugestoes
     if (novoFormato === "Parcelado") setRecorrente(false);
   }
 
+  /** Pré-preenche o formulário com o que a IA entendeu. A pessoa revisa e salva. */
+  function aplicarInterpretacao(l: LancamentoInterpretado) {
+    handleTipoChange(l.tipo);
+    setNomeInput(l.nome);
+    setValorInput(formatCentsToBRL(Math.abs(l.valor_cents)).replace("R$", "").trim());
+    setDataInput(/^\d{4}-\d{2}-\d{2}$/.test(l.data) ? l.data : hojeISO());
+    if (l.tipo === "Transferencia") {
+      setDeContaId(l.de_conta_id ?? "");
+      setParaContaId(l.para_conta_id ?? "");
+      return;
+    }
+    if (l.tipo === "Saida") {
+      const novoModo: Modo = l.metodo === "Crédito" ? "Credito" : "Debito";
+      handleModoChange(novoModo);
+      setStatusSaida(l.status === "Pago" ? "Pago" : "A pagar");
+      if (novoModo === "Credito" && l.parcelas > 1) {
+        setFormato("Parcelado");
+        setNumeroParcelas(String(l.parcelas));
+        setRecorrente(false);
+      } else {
+        setFormato("À vista");
+        setRecorrente(l.conta_fixa);
+      }
+    } else {
+      setStatusEntrada(l.status === "Recebido" ? "Recebido" : "Não recebido");
+      setRecorrente(l.conta_fixa);
+    }
+    if (l.destino_id) setDestinoId(l.destino_id);
+    if (l.categoria_id) setCategoriaId(l.categoria_id);
+  }
+
   function handleDestinoChange(id: string) {
     setDestinoId(id);
     setCategoriaId("");
@@ -411,6 +574,7 @@ export function LancarForm({ contas, cartoes, categorias, pessoaAtiva, sugestoes
           → salvar). */}
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-10">
       <div className="flex min-w-0 flex-col gap-6">
+      {iaDisponivel && <LancarRapido onInterpretado={aplicarInterpretacao} />}
       <Card variant="raised" className="flex flex-col gap-1 p-6">
         <label htmlFor="nome" className="type-eyebrow text-ink-3">
           Nome

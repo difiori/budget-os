@@ -144,7 +144,12 @@ export default async function CartoesPage({
           <p className="type-body text-ink-2">Nenhum cartão cadastrado para este escopo.</p>
         </div>
       ) : (
-        <CartoesList cartoes={views} categorias={(categorias ?? []) as Categoria[]} mesLabel={labelMes(mesReferencia)} />
+        <CartoesList
+          cartoes={views}
+          categorias={(categorias ?? []) as Categoria[]}
+          mesLabel={labelMes(mesReferencia)}
+          iaDisponivel={!!process.env.ANTHROPIC_API_KEY}
+        />
       )}
     </main>
   );

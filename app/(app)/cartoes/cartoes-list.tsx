@@ -12,6 +12,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { SaidaList } from "@/components/saida/saida-list";
 import { formatCentsToBRL } from "@/lib/domain/money";
 import { desfazerFaturaPaga, marcarFaturaComoPaga } from "./actions";
+import { ConciliarFatura } from "./conciliar-fatura";
 import type { Cartao, Categoria, Saida } from "@/lib/domain/types";
 
 interface FaturaView {
@@ -75,7 +76,7 @@ function LimiteBar({ comprometido, limite }: { comprometido: number; limite: num
   );
 }
 
-function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Categoria[] }) {
+function CartaoCard({ view, categorias, iaDisponivel }: { view: CartaoView; categorias: Categoria[]; iaDisponivel: boolean }) {
   const { cartao, aVencer, doMes } = view;
   const router = useRouter();
   const onMutou = () => router.refresh();
@@ -179,6 +180,15 @@ function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Catego
         )}
         {erroPagar && <p className="type-caption mt-2 text-neg">{erroPagar}</p>}
 
+        <ConciliarFatura
+          cartaoId={cartao.id}
+          cartaoNome={cartao.nome}
+          ano={aVencer.cicloAno}
+          mes={aVencer.cicloMes}
+          tituloFatura={aVencer.titulo}
+          iaDisponivel={iaDisponivel}
+        />
+
         {aVencer.compras.length > 0 && (
           <>
             <button
@@ -246,15 +256,17 @@ function CartaoCard({ view, categorias }: { view: CartaoView; categorias: Catego
 export function CartoesList({
   cartoes,
   categorias,
+  iaDisponivel = false,
 }: {
   cartoes: CartaoView[];
   categorias: Categoria[];
   mesLabel: string;
+  iaDisponivel?: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2">
       {cartoes.map((view) => (
-        <CartaoCard key={view.cartao.id} view={view} categorias={categorias} />
+        <CartaoCard key={view.cartao.id} view={view} categorias={categorias} iaDisponivel={iaDisponivel} />
       ))}
     </div>
   );

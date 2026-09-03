@@ -34,12 +34,15 @@ export function LancarProvider({
   cartoes,
   categorias,
   pessoaAtiva,
+  iaDisponivel = false,
   children,
 }: {
   contas: Conta[];
   cartoes: Cartao[];
   categorias: Categoria[];
   pessoaAtiva: Pessoa;
+  /** ANTHROPIC_API_KEY presente no servidor: liga o "Lançar rápido". */
+  iaDisponivel?: boolean;
   children: ReactNode;
 }) {
   const [aberto, setAberto] = useState(false);
@@ -95,7 +98,7 @@ export function LancarProvider({
               className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
-              <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} sugestoes={sugestoes} />
+              <LancarForm contas={contas} cartoes={cartoes} categorias={categorias} pessoaAtiva={pessoaAtiva} sugestoes={sugestoes} iaDisponivel={iaDisponivel} />
             </div>
           </div>
         </div>

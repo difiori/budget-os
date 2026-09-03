@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcularVencimento } from "@/lib/domain/vencimento";
 import { cicloDoCartao } from "@/lib/domain/ciclo-cartao";
+import { interpretarTexto } from "@/lib/ia/interpretar-servidor";
 import { formatCalendarDateISO, hoje, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
 import { gerarParcelas } from "@/lib/domain/parcelamento";
@@ -24,6 +25,8 @@ import type { Pessoa } from "@/lib/domain/types";
  *   status    "pago"|"a_pagar"|"recebido"|"nao_recebido"
  *   data      "YYYY-MM-DD"                       (padrão: hoje em SP)
  *   parcelas  número > 1                         (crédito parcelado)
+ *   texto     frase livre ("54 na amazon no business") — a IA preenche os
+ *             campos acima; com confiança baixa responde 422 sem gravar.
  */
 
 function autorizado(request: Request): boolean {
@@ -68,6 +71,35 @@ export async function POST(request: Request) {
 
   const pessoa = String(corpo.pessoa ?? "");
   if (pessoa !== "Diego" && pessoa !== "Vitor") return erro(400, 'Campo "pessoa" deve ser "Diego" ou "Vitor".');
+
+  // Modo frase livre ("texto"): a IA interpreta e o resto do fluxo segue igual.
+  // Confiança baixa não grava — devolve a interpretação para o atalho mostrar.
+  if (typeof corpo.texto === "string" && corpo.texto.trim()) {
+    const r = await interpretarTexto(createAdminClient(), pessoa, corpo.texto);
+    if (!r.ok) return erro(422, r.error);
+    const l = r.lancamento;
+    if (l.tipo === "Transferencia") return erro(422, "Transferência entre contas: faça pelo app.");
+    if (l.confianca < 0.6) {
+      return Response.json(
+        { ok: false, precisa_revisar: true, interpretacao: l, error: `Não tive certeza: ${l.duvidas.join(" ") || "confira no app."}` },
+        { status: 422 }
+      );
+    }
+    corpo = {
+      ...corpo,
+      tipo: l.tipo === "Entrada" ? "entrada" : "saida",
+      nome: l.nome,
+      valor: l.valor_cents / 100,
+      metodo: l.metodo === "Crédito" ? "credito" : "debito",
+      conta: l.metodo === "Crédito" ? undefined : l.destino_id ?? undefined,
+      cartao: l.metodo === "Crédito" ? l.destino_id ?? undefined : undefined,
+      categoria: l.categoria_id ?? undefined,
+      status: l.status === "Pago" ? "pago" : l.status === "Recebido" ? "recebido" : "",
+      data: l.data,
+      parcelas: l.parcelas,
+    };
+  }
+
   const nome = String(corpo.nome ?? "").trim();
   if (!nome) return erro(400, 'Campo "nome" é obrigatório.');
 
