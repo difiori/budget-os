@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CreditCard } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CreditCard, ExternalLink, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonDot } from "@/components/ui/person-tag";
 import { FixaTag } from "@/components/ui/fixa-tag";
 import { ParcelaTag } from "@/components/ui/parcela-tag";
 import { useToast } from "@/components/ui/toast";
+import { EditarSaidaForm } from "@/components/saida/editar-saida-form";
 import { alternarStatusSaida, marcarSaidasComoPagas } from "@/app/(app)/lancamentos/actions";
 import { formatCentsToBRL } from "@/lib/domain/money";
 import { nomeSemParcela } from "@/lib/domain/parcelamento";
-import type { Saida } from "@/lib/domain/types";
+import type { Categoria, Saida } from "@/lib/domain/types";
 
 /** Fatura de um cartão no mês: total pendente + os ids das compras que a
  * compõem (pagas de uma vez ao quitar a fatura). */
@@ -38,6 +41,8 @@ export function ContasAPagar({
   cartoes,
   totalCents,
   fixaIds = [],
+  categorias = [],
+  cartoesHref = "/cartoes",
 }: {
   debitos: Saida[];
   destinoPorId: Record<string, string>;
@@ -45,12 +50,23 @@ export function ContasAPagar({
   totalCents: number;
   /** Ids dos débitos que vêm de uma conta fixa (ganham o selo "fixa"). */
   fixaIds?: string[];
+  /** Para a edição inline (categoria). */
+  categorias?: Categoria[];
+  /** Fatura se edita na tela de Cartões. */
+  cartoesHref?: string;
 }) {
   const fixas = new Set(fixaIds);
+  const router = useRouter();
   const [listaDeb, setListaDeb] = useState(debitos);
   const [listaCard, setListaCard] = useState(cartoes);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const toast = useToast();
+
+  function aoEditar() {
+    setEditandoId(null);
+    router.refresh();
+  }
 
   const vazio = listaDeb.length === 0 && listaCard.length === 0;
 
@@ -105,11 +121,22 @@ export function ContasAPagar({
               >
                 A pagar
               </button>
+              <Link
+                href={cartoesHref}
+                aria-label={`Abrir ${c.nome} em Cartões`}
+                title="Compras da fatura em Cartões"
+                className="shrink-0 rounded-sm p-1.5 text-ink-3 transition-colors hover:bg-bg hover:text-ink"
+              >
+                <ExternalLink size={14} />
+              </Link>
             </li>
           ))}
 
-          {listaDeb.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+          {listaDeb.map((s) => {
+            const aberta = editandoId === s.id;
+            return (
+            <li key={s.id} className="py-2 first:pt-0 last:pb-0">
+            <div className="flex items-center gap-3">
               {/* Mesma largura do ícone de cartão acima: os nomes alinham num eixo só. */}
               <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                 <PersonDot pessoa={s.pessoa} />
@@ -133,8 +160,32 @@ export function ContasAPagar({
               >
                 A pagar
               </button>
+              <button
+                type="button"
+                onClick={() => setEditandoId(aberta ? null : s.id)}
+                aria-label={`Editar ${s.nome}`}
+                aria-expanded={aberta}
+                className={`shrink-0 rounded-sm p-1.5 transition-colors hover:bg-bg ${aberta ? "text-ink" : "text-ink-3 hover:text-ink"}`}
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+            {aberta && (
+              <div className="mt-2">
+                <EditarSaidaForm
+                  saida={s}
+                  categorias={categorias}
+                  destinoNome={destinoPorId[s.id] ?? "—"}
+                  statusEditavel
+                  onSalvo={aoEditar}
+                  onExcluido={aoEditar}
+                  onCancelar={() => setEditandoId(null)}
+                />
+              </div>
+            )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </Card>

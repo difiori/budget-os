@@ -42,6 +42,7 @@ export const ESTADO_PADRAO = (hojeISO: string): EstadoLancamento => ({
 
 /** Valor em centavos como o campo "Valor" espera (sem "R$"). */
 export function valorParaCampo(cents: number): string {
+  if (cents === 0) return "";
   return formatCentsToBRL(Math.abs(cents)).replace("R$", "").trim();
 }
 

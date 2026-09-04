@@ -6,6 +6,7 @@ import { Amount } from "@/components/ui/amount";
 import { PersonTag } from "@/components/ui/person-tag";
 import { UltimasSaidas } from "@/components/dashboard/ultimas-saidas";
 import { ContasAPagar } from "@/components/dashboard/contas-a-pagar";
+import { EntradasDoMes } from "@/components/dashboard/entradas-do-mes";
 import { UsoDaRendaCard } from "@/components/dashboard/uso-da-renda";
 import { Projecao } from "@/components/dashboard/projecao";
 import { EntradasSaidas } from "@/components/dashboard/entradas-saidas";
@@ -22,7 +23,7 @@ import { cicloDoCartao, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { resumirLancamentos, saidasDoMesPorData } from "@/lib/domain/feed-saidas";
 import { ocorrenciasVirtuais } from "@/lib/domain/conta-fixa";
 import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
-import { labelMes, MESES_ABREV } from "@/lib/format/meses";
+import { labelMes, MESES, MESES_ABREV } from "@/lib/format/meses";
 import type { Cartao, Categoria, Conta, ContaFixa, Entrada, Pessoa, Saida } from "@/lib/domain/types";
 
 function pessoaResumo(
@@ -256,6 +257,11 @@ export default async function DashboardPage({
   // Contas do perfil ativo, pro detalhamento do saldo no card principal.
   const contasDaPessoa = todasContas.filter((c) => c.dono === contaAtiva);
 
+  // Entradas do mês da pessoa ativa (por data), a receber primeiro, depois por data.
+  const entradasDoMesPessoa = todasEntradas
+    .filter((e) => e.pessoa === contaAtiva && e.data >= inicioMes && e.data < fimMes)
+    .sort((a, b) => (a.status === b.status ? a.data.localeCompare(b.data) : a.status === "Recebido" ? 1 : -1));
+
   // Faturas dos cartões da pessoa ativa: compras do mês em foco (regras 1-2,
   // mesma base da tela Cartões), que vencem no dia do cartão do mês seguinte.
   const dd = (n: number) => String(n).padStart(2, "0");
@@ -296,12 +302,18 @@ export default async function DashboardPage({
               <p className="type-hero mt-2 text-ink">
                 <Amount cents={ativo.saldoAtualTotal} />
               </p>
-              <p className="type-label mt-2 text-ink-2">
-                Saldo previsto · {labelMes(mesReferencia)}{" "}
-                <Amount cents={ativo.saldoPrevistoTotal} className="font-medium" />
-              </p>
             </div>
             <PersonTag pessoa={contaAtiva} />
+          </div>
+
+          {/* Saldo previsto em segundo nível de destaque: faixa tonal, valor
+              em headline. É o número que responde "como fecho o mês". */}
+          <div className="flex flex-col gap-1 rounded-md bg-brand-tint/50 px-4 py-3">
+            <p className="type-eyebrow text-ink-3">Saldo previsto</p>
+            <p className="type-caption text-ink-2">fim de {MESES[mesReferencia.month - 1].toLowerCase()} · saldo atual + a receber − a pagar</p>
+            <p className="mt-1">
+              <Amount cents={ativo.saldoPrevistoTotal} className="type-headline figures font-semibold" />
+            </p>
           </div>
 
           <div className="rule-ledger" aria-hidden="true" />
@@ -399,13 +411,21 @@ export default async function DashboardPage({
       <section className="mt-8">
         {/* Contas a pagar com a largura de duas colunas; "para onde foi" na terceira. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+          <div className="flex flex-col gap-5 lg:col-span-2">
             <ContasAPagar
               debitos={debitosAPagar}
               destinoPorId={destinoAPagar}
               cartoes={cartoesAPagar}
               totalCents={aPagarTotal}
               fixaIds={debitosAPagar.filter((s) => s.recorrente_id).map((s) => s.id)}
+              categorias={todasCategorias}
+              cartoesHref={`/cartoes?ano=${mesReferencia.year}&mes=${mesReferencia.month}`}
+            />
+            <EntradasDoMes
+              entradas={entradasDoMesPessoa}
+              contas={contasDaPessoa.map((c) => ({ id: c.id, nome: c.nome }))}
+              pessoa={contaAtiva}
+              mesLabel={labelMes(mesReferencia)}
             />
           </div>
           <SaidasPorCategoria

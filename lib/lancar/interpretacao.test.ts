@@ -41,6 +41,9 @@ describe("estadoDaInterpretacao", () => {
     expect(e.formato).toBe("À vista");
     expect(e.recorrente).toBe(true);
   });
+  it("valor zero deixa o campo vazio (abrir o formulário só com o tipo escolhido)", () => {
+    expect(estadoDaInterpretacao({ ...base, tipo: "Entrada", valor_cents: 0, metodo: null, destino_id: "conta-1", categoria_id: null }, HOJE).valorInput).toBe("");
+  });
   it("data inválida cai em hoje; valor negativo vira positivo", () => {
     const e = estadoDaInterpretacao({ ...base, data: "ontem", valor_cents: -1050 }, HOJE);
     expect(e.dataInput).toBe(HOJE);
