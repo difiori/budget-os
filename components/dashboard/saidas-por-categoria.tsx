@@ -16,15 +16,17 @@ export interface LinhaCategoria {
  * Segue o "Vendo como" do Painel — um card do casal aqui, ao lado do saldo e
  * das contas a pagar da pessoa, misturava escopos e fazia o aporte de um
  * aparecer na leitura do outro. O percentual é sobre o total do mês da
- * pessoa (todas as categorias, não só as exibidas); o que não coube nas
- * maiores vira uma linha "Outras", e saída sem categoria aparece nomeada.
+ * pessoa. Ao lado de Contas a pagar, que é alto, o card é elástico: mostra
+ * todas as categorias com movimento (sem "Outras"), em linhas compactas; um
+ * `maxLinhas` opcional volta a agrupar o excedente em "Outras". Saída sem
+ * categoria aparece nomeada.
  */
 export function SaidasPorCategoria({
   pessoa,
   mesLabel,
   linhas,
   semCategoria,
-  maxLinhas = 6,
+  maxLinhas = Infinity,
 }: {
   pessoa: Pessoa;
   mesLabel: string;
@@ -35,8 +37,8 @@ export function SaidasPorCategoria({
   maxLinhas?: number;
 }) {
   const total = linhas.reduce((sum, l) => sum + l.total, 0) + semCategoria;
-  const principais = linhas.slice(0, maxLinhas);
-  const demais = linhas.slice(maxLinhas);
+  const principais = Number.isFinite(maxLinhas) ? linhas.slice(0, maxLinhas) : linhas;
+  const demais = Number.isFinite(maxLinhas) ? linhas.slice(maxLinhas) : [];
   const outras = demais.reduce((sum, l) => sum + l.total, 0);
   const exibidas: LinhaCategoria[] = [
     ...principais,
@@ -47,7 +49,7 @@ export function SaidasPorCategoria({
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
   return (
-    <Card className="flex flex-col gap-3.5 sm:col-span-2 lg:col-span-1">
+    <Card className="flex flex-col gap-3 sm:col-span-2 lg:col-span-1">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center justify-between gap-3">
           <p className="type-title text-ink">Saídas por categoria</p>
@@ -61,7 +63,7 @@ export function SaidasPorCategoria({
       ) : (
         <>
           {exibidas.map((l) => (
-            <div key={l.id} className="flex flex-col gap-1.5">
+            <div key={l.id} className="flex flex-col gap-1">
               <div className="flex items-baseline justify-between gap-3">
                 <span className={`truncate text-[0.875rem] ${l.id.startsWith("__") ? "text-ink-2" : "text-ink"}`}>
                   {l.nome}

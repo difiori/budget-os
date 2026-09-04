@@ -7,10 +7,11 @@ import { Chip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { inputClasses } from "@/components/ui/field";
 import { FixaTag } from "@/components/ui/fixa-tag";
+import { ParcelaTag } from "@/components/ui/parcela-tag";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { categoriasParaPessoa } from "@/lib/domain/categoria";
-import { nomeComParcela, nomeSemParcela } from "@/lib/domain/parcelamento";
+import { nomeSemParcela } from "@/lib/domain/parcelamento";
 import { parseCentsFromBRL } from "@/lib/domain/money";
 import { alternarStatusSaida, atualizarSaida, excluirSaida } from "../../app/(app)/lancamentos/actions";
 import type { Categoria, Saida, SaidaStatus } from "@/lib/domain/types";
@@ -185,7 +186,8 @@ function SaidaRow({
     <div className="flex items-baseline justify-between gap-3 py-2">
       <div className="min-w-0">
         <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
-          <span className="truncate">{nomeComParcela(saida.nome, saida.parcela)}</span>
+          <span className="truncate">{nomeSemParcela(saida.nome, saida.parcela)}</span>
+          <ParcelaTag parcela={saida.parcela} />
           {saida.recorrente_id && <FixaTag />}
         </p>
         <p className="type-caption text-ink-3">

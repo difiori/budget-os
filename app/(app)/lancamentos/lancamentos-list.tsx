@@ -8,6 +8,7 @@ import { Amount } from "@/components/ui/amount";
 import { Combobox } from "@/components/ui/combobox";
 import { PersonDot } from "@/components/ui/person-tag";
 import { FixaTag } from "@/components/ui/fixa-tag";
+import { ParcelaTag } from "@/components/ui/parcela-tag";
 import { inputClasses } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -404,7 +405,8 @@ function SaidaRow({
       <LinhaBase>
         <PersonDot pessoa={saida.pessoa} />
         <span className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
-          <span className="truncate">{nomeComParcela(saida.nome, saida.parcela)}</span>
+          <span className="truncate">{nomeSemParcela(saida.nome, saida.parcela)}</span>
+          <ParcelaTag parcela={saida.parcela} />
           {saida.recorrente_id && <FixaTag />}
         </span>
         <span className="type-caption truncate text-ink-2">{categoriaNome}</span>

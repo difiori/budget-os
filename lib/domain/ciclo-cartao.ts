@@ -42,6 +42,17 @@ export function fechamentoDaFatura(mesFatura: Pick<CalendarDate, "year" | "month
   return { year: mesFatura.year, month: mesFatura.month, day: diaFechamentoNoMes(ciclo, mesFatura) };
 }
 
+/**
+ * Mês pelo qual a fatura é CHAMADA na interface: o mês do vencimento. A
+ * "fatura de setembro" (compras de setembro, no ciclo padrão) vence em
+ * outubro, e é assim que o banco e a pessoa a chamam. Internamente o mês da
+ * fatura continua sendo o do ciclo (mesDaFatura); só o rótulo empurra.
+ */
+export function mesDeCobranca(mesFatura: Pick<CalendarDate, "year" | "month">, ciclo: CicloCartao): Pick<CalendarDate, "year" | "month"> {
+  const v = vencimentoDaFatura(mesFatura, ciclo);
+  return { year: v.year, month: v.month };
+}
+
 /** Data de vencimento da fatura de um mês. */
 export function vencimentoDaFatura(mesFatura: Pick<CalendarDate, "year" | "month">, ciclo: CicloCartao): CalendarDate {
   const fecha = diaFechamentoNoMes(ciclo, mesFatura);

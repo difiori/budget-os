@@ -14,7 +14,7 @@ import { getContaAtiva } from "@/lib/auth/conta-ativa";
 import { pessoaPorEmail } from "@/lib/auth/pessoa";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
-import { projecaoSaldoMeses, resumoContaMes } from "@/lib/domain/mes";
+import { gastosDoMesCents, projecaoSaldoMeses, resolverContaEfetivaDaSaida, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
 import { faturaAtualCents } from "@/lib/domain/fatura";
@@ -31,16 +31,21 @@ function pessoaResumo(
   saidas: Saida[],
   entradas: Entrada[],
   mesReferencia: ReturnType<typeof hoje>,
-  contaVinculadaPorCartaoId: Map<string, string | null>
+  contaVinculadaPorCartaoId: Map<string, string | null>,
+  /** Categoria "Investimentos": sai da conta mas não é consumo — o card separa. */
+  investimentosId: string | null
 ) {
   const contasPessoa = contas.filter((c) => c.dono === pessoa);
   const saidasPessoa = saidas.filter((s) => s.pessoa === pessoa);
   const entradasPessoa = entradas.filter((e) => e.pessoa === pessoa);
 
   const saldoAtualTotal = contasPessoa.reduce((sum, conta) => sum + conta.saldo_atual_cents, 0);
+  // Tudo pelas CONTAS da pessoa (inclusive saídas e entradas do mês), para o
+  // card de uso da renda fechar como uma equação só: início + entradas −
+  // saídas = previsto, o mesmo previsto do cartão de saldo.
   const totais = contasPessoa.reduce(
     (acc, conta) => {
-      const { saldoPrevisto, saldoInicio, aReceber, aPagar } = resumoContaMes(
+      const { saldoPrevisto, saldoInicio, aReceber, aPagar, gastos, entradasConta } = resumoContaMes(
         conta,
         saidasPessoa,
         entradasPessoa,
@@ -51,15 +56,20 @@ function pessoaResumo(
       acc.saldoInicioTotal += saldoInicio;
       acc.aReceberTotal += aReceber;
       acc.aPagarTotal += aPagar;
+      acc.saidasMes += gastos;
+      acc.entradasMes += entradasConta;
+      if (investimentosId) {
+        const investidas = saidasPessoa
+          .filter((x) => x.categoria_id === investimentosId)
+          .map((x) => ({ ...x, conta_id: resolverContaEfetivaDaSaida(x, contaVinculadaPorCartaoId) }));
+        acc.investimentosMes += gastosDoMesCents(conta.id, investidas, mesReferencia);
+      }
       return acc;
     },
-    { saldoPrevistoTotal: 0, saldoInicioTotal: 0, aReceberTotal: 0, aPagarTotal: 0 }
+    { saldoPrevistoTotal: 0, saldoInicioTotal: 0, aReceberTotal: 0, aPagarTotal: 0, saidasMes: 0, entradasMes: 0, investimentosMes: 0 }
   );
 
-  const saidasMes = gastosPorMes(saidasPessoa, [mesReferencia])[0];
-  const entradasMes = entradasPorMes(entradasPessoa, [mesReferencia])[0];
-
-  return { saldoAtualTotal, ...totais, saidasMes, entradasMes };
+  return { saldoAtualTotal, ...totais };
 }
 
 function painelHref(mes: CalendarDate) {
@@ -138,13 +148,14 @@ export default async function DashboardPage({
   const todasSaidas = saidasTodas;
   const todasEntradas = entradasTodas;
   const todasCategorias = (categorias ?? []) as Categoria[];
+  const investimentosId = todasCategorias.find((c) => c.nome === "Investimentos")?.id ?? null;
   const listaCartoes = (cartoes ?? []) as Pick<Cartao, "id" | "nome" | "dono" | "dia_fechamento" | "dia_vencimento" | "conta_vinculada_id">[];
   const contaVinculadaPorCartaoId = new Map(listaCartoes.map((c) => [c.id, c.conta_vinculada_id]));
   const contaPorId = new Map(todasContas.map((c) => [c.id, c.nome]));
   const cartaoPorId = new Map(listaCartoes.map((c) => [c.id, c.nome]));
 
-  const diego = pessoaResumo("Diego", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
-  const vitor = pessoaResumo("Vitor", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId);
+  const diego = pessoaResumo("Diego", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId, investimentosId);
+  const vitor = pessoaResumo("Vitor", todasContas, todasSaidas, todasEntradas, mesReferencia, contaVinculadaPorCartaoId, investimentosId);
   const ativo = contaAtiva === "Diego" ? diego : vitor;
 
   const saldoAtualCasal = diego.saldoAtualTotal + vitor.saldoAtualTotal;
@@ -275,10 +286,10 @@ export default async function DashboardPage({
         />
       </PageHeader>
 
-      {/* Saldo e Contas a pagar dividem a linha meio a meio: a lista de contas
-          precisa de largura para nome, vencimento, valor e tag na mesma linha. */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card variant="glass" className="flex flex-col gap-5 p-6">
+      {/* Saldo com 2/3 da linha; ao lado, os dois cards de Uso da renda
+          empilhados, a pessoa ativa primeiro (pedido do Diego em 04/09). */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <Card variant="glass" className="flex flex-col gap-5 p-6 lg:col-span-2">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="type-eyebrow text-ink-3">Saldo atual</p>
@@ -374,25 +385,29 @@ export default async function DashboardPage({
           </div>
         </Card>
 
-        <ContasAPagar
-          debitos={debitosAPagar}
-          destinoPorId={destinoAPagar}
-          cartoes={cartoesAPagar}
-          totalCents={aPagarTotal}
-          fixaIds={debitosAPagar.filter((s) => s.recorrente_id).map((s) => s.id)}
-        />
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-1">
+            <h2 className="type-title text-ink">Uso da renda</h2>
+            <p className="type-caption text-ink-3">saídas sobre saldo inicial + entradas</p>
+          </div>
+          {(contaAtiva === "Vitor" ? (["Vitor", "Diego"] as const) : (["Diego", "Vitor"] as const)).map((p) => (
+            <UsoDaRendaCard key={p} pessoa={p} resumo={p === "Diego" ? diego : vitor} mesReferencia={mesReferencia} />
+          ))}
+        </div>
       </div>
 
       <section className="mt-8">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
-          <h2 className="type-title text-ink">Uso da renda</h2>
-          <p className="type-caption text-ink-3">saídas do mês sobre o disponível: saldo no início do mês + entradas</p>
-        </div>
-        {/* Duas colunas de uso (Diego, Vitor) + uma de "para onde foi" quando há
-            gastos — assim a linha ocupa a largura toda, sem espaço morto. */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <UsoDaRendaCard pessoa="Diego" resumo={diego} mesReferencia={mesReferencia} />
-          <UsoDaRendaCard pessoa="Vitor" resumo={vitor} mesReferencia={mesReferencia} />
+        {/* Contas a pagar com a largura de duas colunas; "para onde foi" na terceira. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <ContasAPagar
+              debitos={debitosAPagar}
+              destinoPorId={destinoAPagar}
+              cartoes={cartoesAPagar}
+              totalCents={aPagarTotal}
+              fixaIds={debitosAPagar.filter((s) => s.recorrente_id).map((s) => s.id)}
+            />
+          </div>
           <SaidasPorCategoria
             pessoa={contaAtiva}
             mesLabel={labelMes(mesReferencia)}

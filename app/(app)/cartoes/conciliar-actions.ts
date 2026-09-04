@@ -7,7 +7,7 @@ import { pessoaAtiva } from "@/lib/auth/pessoa-ativa";
 import { clienteIA, iaConfigurada, MODELO_IA, mensagemErroIA, registrarUsoIA } from "@/lib/ia/cliente";
 import { FaturaExtraidaSchema, mensagemFatura, SYSTEM_PROMPT_FATURA, type FaturaExtraida } from "@/lib/ia/extrair-fatura";
 import { conciliar, type Conciliacao, type ItemFatura } from "@/lib/domain/conciliacao";
-import { cicloDoCartao, mesDaFatura } from "@/lib/domain/ciclo-cartao";
+import { cicloDoCartao, mesDaFatura, mesDeCobranca } from "@/lib/domain/ciclo-cartao";
 import { calcularVencimento } from "@/lib/domain/vencimento";
 import { formatCalendarDateISO, isSameMonth, parseCalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
@@ -78,7 +78,7 @@ export async function conciliarFaturaIA(formData: FormData): Promise<ResultadoCo
       messages: [
         {
           role: "user",
-          content: [documento, { type: "text", text: mensagemFatura({ cartao: cartao.nome as string, mesFatura: labelMes(mesFatura) }) }],
+          content: [documento, { type: "text", text: mensagemFatura({ cartao: cartao.nome as string, mesFatura: labelMes(mesDeCobranca(mesFatura, ciclo)) }) }],
         },
       ],
       output_config: { effort: "high", format: zodOutputFormat(FaturaExtraidaSchema) },

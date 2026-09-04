@@ -6,10 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Amount } from "@/components/ui/amount";
 import { PersonDot } from "@/components/ui/person-tag";
 import { FixaTag } from "@/components/ui/fixa-tag";
+import { ParcelaTag } from "@/components/ui/parcela-tag";
 import { useToast } from "@/components/ui/toast";
 import { alternarStatusSaida, marcarSaidasComoPagas } from "@/app/(app)/lancamentos/actions";
 import { formatCentsToBRL } from "@/lib/domain/money";
-import { nomeComParcela } from "@/lib/domain/parcelamento";
+import { nomeSemParcela } from "@/lib/domain/parcelamento";
 import type { Saida } from "@/lib/domain/types";
 
 /** Fatura de um cartão no mês: total pendente + os ids das compras que a
@@ -109,10 +110,14 @@ export function ContasAPagar({
 
           {listaDeb.map((s) => (
             <li key={s.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-              <PersonDot pessoa={s.pessoa} />
+              {/* Mesma largura do ícone de cartão acima: os nomes alinham num eixo só. */}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                <PersonDot pessoa={s.pessoa} />
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
-                  <span className="truncate">{nomeComParcela(s.nome, s.parcela)}</span>
+                  <span className="truncate">{nomeSemParcela(s.nome, s.parcela)}</span>
+                  <ParcelaTag parcela={s.parcela} />
                   {fixas.has(s.id) && <FixaTag />}
                 </p>
                 <p className="type-caption truncate text-ink-3">

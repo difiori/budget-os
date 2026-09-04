@@ -99,3 +99,14 @@ describe("nomeComParcela / nomeSemParcela", () => {
     expect(nomeComParcela(p.nome, p.parcela)).toBe(p.nome);
   });
 });
+
+describe("parseParcela", () => {
+  it("lê NN/NN e rejeita o resto", async () => {
+    const { parseParcela } = await import("./parcelamento");
+    expect(parseParcela("02/10")).toEqual({ atual: 2, total: 10 });
+    expect(parseParcela("10/10")).toEqual({ atual: 10, total: 10 });
+    expect(parseParcela("11/10")).toBeNull();
+    expect(parseParcela("x")).toBeNull();
+    expect(parseParcela(null)).toBeNull();
+  });
+});

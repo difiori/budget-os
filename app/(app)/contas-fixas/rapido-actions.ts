@@ -8,6 +8,7 @@ import { formatCalendarDateISO, parseCalendarDate } from "@/lib/domain/calendar-
 import { cicloDoCartao, mesDaFatura, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { normalizar } from "@/lib/lancar/interpretar-local";
 import { labelMes } from "@/lib/format/meses";
+import { tituloFatura } from "@/lib/format/fatura";
 import type { MetodoPagamento, SaidaStatus } from "@/lib/domain/types";
 
 /** Situação de uma conta fixa num mês, para o Lançar rápido agir sem sair do diálogo. */
@@ -68,7 +69,7 @@ export async function situacaoContaFixa(nome: string, dataISO: string): Promise<
       const ciclo = cicloDoCartao(cartao as { dia_fechamento: number; dia_vencimento: number });
       const mesFatura = mesDaFatura(parseCalendarDate(oc.data as string), ciclo);
       const venc = vencimentoDaFatura(mesFatura, ciclo);
-      faturaLabel = `Fatura de ${labelMes(mesFatura)} · vence ${String(venc.day).padStart(2, "0")}/${String(venc.month).padStart(2, "0")}`;
+      faturaLabel = `${tituloFatura(mesFatura, ciclo)} · vence ${String(venc.day).padStart(2, "0")}/${String(venc.month).padStart(2, "0")}`;
     }
   }
 

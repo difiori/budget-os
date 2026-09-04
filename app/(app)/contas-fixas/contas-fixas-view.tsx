@@ -19,7 +19,8 @@ import { addMonths, parseCalendarDate, type CalendarDate } from "@/lib/domain/ca
 import { diasAte, ocorrenciaDoMes, ocorrenciaPrevista, vigenteNoMes } from "@/lib/domain/conta-fixa";
 import { cicloDoCartao, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { formatCentsToBRL, parseCentsFromBRL } from "@/lib/domain/money";
-import { labelMes, MESES, MESES_ABREV } from "@/lib/format/meses";
+import { labelMes, MESES_ABREV } from "@/lib/format/meses";
+import { tituloFatura } from "@/lib/format/fatura";
 import type { Cartao, Categoria, Conta, ContaFixa, MetodoPagamento, Pessoa, Saida } from "@/lib/domain/types";
 import {
   atualizarContaFixa,
@@ -289,8 +290,9 @@ export function ContasFixasView({
   const dd = (n: number) => String(n).padStart(2, "0");
   function rotuloFatura(nomeCartao: string): string {
     const cartao = cartoes.find((c) => c.nome === nomeCartao);
-    const venc = vencimentoDaFatura(mesReferencia, cicloDoCartao(cartao));
-    return `Fatura de ${MESES[mesReferencia.month - 1].toLowerCase()} · vence ${dd(venc.day)}/${dd(venc.month)}`;
+    const ciclo = cicloDoCartao(cartao);
+    const venc = vencimentoDaFatura(mesReferencia, ciclo);
+    return `${tituloFatura(mesReferencia, ciclo, { minusculo: true })} · vence ${dd(venc.day)}/${dd(venc.month)}`;
   }
 
   // Resumo do mês: pagamento e urgência só fazem sentido no débito.

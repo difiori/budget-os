@@ -23,6 +23,16 @@ export function nomeSemParcela(nome: string, parcela: string | null | undefined)
   return limpo.endsWith(parcela) ? limpo.slice(0, -parcela.length).trimEnd() : nome;
 }
 
+/** "02/10" → { atual: 2, total: 10 }; qualquer outra coisa → null. */
+export function parseParcela(parcela: string | null | undefined): { atual: number; total: number } | null {
+  const m = parcela?.trim().match(/^(\d{1,2})\s*\/\s*(\d{1,2})$/);
+  if (!m) return null;
+  const atual = Number(m[1]);
+  const total = Number(m[2]);
+  if (atual < 1 || total < 1 || atual > total) return null;
+  return { atual, total };
+}
+
 export interface CompraParcelada {
   nome: string;
   totalCents: number;

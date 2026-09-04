@@ -1,5 +1,6 @@
 "use client";
 
+import { ParcelaTag } from "@/components/ui/parcela-tag";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,7 +23,7 @@ import {
   type ResumoLancamento,
 } from "@/lib/domain/feed-saidas";
 import { formatCentsToBRL } from "@/lib/domain/money";
-import { nomeComParcela } from "@/lib/domain/parcelamento";
+import { nomeSemParcela } from "@/lib/domain/parcelamento";
 import { labelMes, MESES_ABREV } from "@/lib/format/meses";
 import type { Categoria, Pessoa, Saida } from "@/lib/domain/types";
 
@@ -307,7 +308,10 @@ export function UltimasSaidas({
                     <div className="flex min-w-0 items-start gap-2.5 xl:block">
                       <PersonDot pessoa={s.pessoa} className="mt-2 xl:hidden" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[0.875rem] text-ink">{nomeComParcela(s.nome, s.parcela)}</p>
+                        <p className="flex min-w-0 items-center gap-1.5 text-[0.875rem] text-ink">
+                          <span className="truncate">{nomeSemParcela(s.nome, s.parcela)}</span>
+                          <ParcelaTag parcela={s.parcela} />
+                        </p>
                         <p className="type-caption truncate text-ink-3">{detalhes}</p>
                       </div>
                       {/* Mobile: valor e status encostados à direita, nas mesmas

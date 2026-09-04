@@ -10,7 +10,8 @@ import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/ca
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { cicloDoCartao, fechamentoDaFatura, mesDaFatura, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
-import { labelMes, MESES } from "@/lib/format/meses";
+import { labelMes } from "@/lib/format/meses";
+import { tituloFatura } from "@/lib/format/fatura";
 import { CartoesList, type CartaoView } from "./cartoes-list";
 import type { Cartao, Categoria, Saida } from "@/lib/domain/types";
 
@@ -105,7 +106,7 @@ export default async function CartoesPage({
       disponivel: limiteDisponivelCents(cartao.limite_cents, comprometido),
       contaVinculadaNome: cartao.conta_vinculada_id ? contaPorId.get(cartao.conta_vinculada_id) ?? null : null,
       aVencer: {
-        titulo: `Fatura de ${MESES[mesAnterior.month - 1]}`,
+        titulo: tituloFatura(mesAnterior, ciclo),
         vencimentoLabel: `vence ${dd(vencAVencer.day)}/${dd(vencAVencer.month)}`,
         totalCents: faturaAtualCents(cartao.id, saidasCartao, mesAnterior, ciclo),
         compras: comprasAVencer,
@@ -116,7 +117,7 @@ export default async function CartoesPage({
         cicloMes: mesAnterior.month,
       },
       doMes: {
-        titulo: `Fatura de ${MESES[mesReferencia.month - 1]}`,
+        titulo: tituloFatura(mesReferencia, ciclo),
         vencimentoLabel: `fecha ${dd(fechaDoMes.day)}/${dd(fechaDoMes.month)} · vence ${dd(vencDoMes.day)}/${dd(vencDoMes.month)}`,
         totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia, ciclo),
         compras: comprasDoMes,

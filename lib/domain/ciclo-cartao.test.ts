@@ -33,6 +33,18 @@ describe("vencimentoDaFatura", () => {
   });
 });
 
+describe("mesDeCobranca (rótulo da fatura)", () => {
+  it("padrão fecha 31/vence 10: compras de setembro = fatura de outubro", async () => {
+    const { mesDeCobranca } = await import("./ciclo-cartao");
+    expect(mesDeCobranca({ year: 2026, month: 9 }, { dia_fechamento: 31, dia_vencimento: 10 })).toEqual({ year: 2026, month: 10 });
+    expect(mesDeCobranca({ year: 2026, month: 12 }, { dia_fechamento: 31, dia_vencimento: 10 })).toEqual({ year: 2027, month: 1 });
+  });
+  it("fecha 5/vence 15: cobra no próprio mês", async () => {
+    const { mesDeCobranca } = await import("./ciclo-cartao");
+    expect(mesDeCobranca({ year: 2026, month: 9 }, { dia_fechamento: 5, dia_vencimento: 15 })).toEqual({ year: 2026, month: 9 });
+  });
+});
+
 describe("fechamento e período", () => {
   it("fechamento limitado ao tamanho do mês", () => {
     expect(fechamentoDaFatura({ year: 2026, month: 2 }, CICLO_PADRAO)).toEqual({ year: 2026, month: 2, day: 28 });
