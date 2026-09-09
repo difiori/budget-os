@@ -52,7 +52,10 @@ export const config = {
   // Exclui as rotas de API (fazem a própria autenticação, ex.: token do
   // atalho) e os assets do PWA (manifest, ícones, service worker) do
   // redirecionamento de login.
+  // Os ícones precisam ficar fora do gate: o Safari/iOS busca o ícone da
+  // tela de início e do Dock SEM os cookies de sessão — com redirect para
+  // /login, ele cai no ícone antigo em cache.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|favicon.png|manifest.webmanifest|manifest.json|app-icon4.png|sw.js).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|favicon.png|favicon-light.png|favicon-dark.png|apple-icon.png|app-icon.png|icon-192.png|icon-512.png|icon-mono-512.png|manifest.webmanifest|manifest.json|sw.js).*)",
   ],
 };

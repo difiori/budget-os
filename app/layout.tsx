@@ -23,15 +23,13 @@ export const metadata: Metadata = {
   description: "Gestão financeira do casal — Diego & Vitor",
   applicationName: "Budget OS",
   icons: {
-    // Aba do navegador: SVG que troca claro/escuro pelo sistema (Chrome, Edge,
-    // Firefox); PNG de fallback para quem não lê SVG. Tela de início (iOS) e
-    // manifesto usam o PNG escuro em quadrado cheio — o sistema arredonda.
-    // Gerados por scripts/gerar-icones.ts.
-    icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.png", sizes: "96x96", type: "image/png" },
-    ],
-    shortcut: "/favicon.png",
+    // Aba do navegador: o script de tema abaixo troca este href entre
+    // favicon-light.png e favicon-dark.png seguindo o tema do PRÓPRIO app
+    // (funciona no Safari, que não lê tema em favicon SVG). Tela de início
+    // (iOS) e manifesto usam o PNG escuro em quadrado cheio — o sistema
+    // arredonda. Gerados por scripts/gerar-icones.ts.
+    icon: { url: "/favicon-dark.png", sizes: "96x96", type: "image/png" },
+    shortcut: "/favicon-dark.png",
     apple: "/apple-icon.png",
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
@@ -57,16 +55,49 @@ export const viewport: Viewport = {
   ],
 };
 
-/* Aplica o tema salvo (ou o do sistema) antes da primeira pintura,
- * evitando flash de tema errado. */
+/* Aplica o tema salvo (ou o do sistema) antes da primeira pintura, evitando
+ * flash de tema errado — e faz o favicon da aba seguir o mesmo tema: troca o
+ * href de <link rel="icon"> agora, quando o interruptor dispara "theme-change"
+ * e quando o sistema muda de esquema (só vale se não há tema salvo). */
 const themeInitScript = `
 (function () {
+  function temaAtual() {
+    try {
+      var stored = localStorage.getItem("theme");
+      if (stored === "light" || stored === "dark") return stored;
+    } catch (e) {}
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function aplicarFavicon(theme) {
+    var href = theme === "dark" ? "/favicon-dark.png" : "/favicon-light.png";
+    var links = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]');
+    if (!links.length) {
+      var l = document.createElement("link");
+      l.rel = "icon"; l.type = "image/png"; l.sizes = "96x96";
+      document.head.appendChild(l);
+      links = [l];
+    }
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].getAttribute("href") !== href) links[i].setAttribute("href", href);
+    }
+  }
+  function temaDoDocumento() {
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
   try {
-    var stored = localStorage.getItem("theme");
-    var theme = stored === "light" || stored === "dark"
-      ? stored
-      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var theme = temaAtual();
     document.documentElement.setAttribute("data-theme", theme);
+    aplicarFavicon(theme);
+    // Os <link rel="icon"> do Next entram no <head> depois deste script:
+    // reaplica quando o documento termina de carregar.
+    document.addEventListener("DOMContentLoaded", function () { aplicarFavicon(temaDoDocumento()); });
+    window.addEventListener("theme-change", function () { aplicarFavicon(temaDoDocumento()); });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+      try { if (localStorage.getItem("theme")) return; } catch (e) {}
+      var t = temaAtual();
+      document.documentElement.setAttribute("data-theme", t);
+      aplicarFavicon(t);
+    });
   } catch (e) {}
 })();
 `;

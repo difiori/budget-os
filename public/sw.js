@@ -5,7 +5,7 @@
 //   imutáveis por conterem hash no nome).
 // Nada é pré-cacheado no install — o cache se popula conforme o uso.
 
-const CACHE = "budget-os-v1";
+const CACHE = "budget-os-v2"; // v2: ícones novos (descarta o cifrão antigo em cache)
 
 self.addEventListener("install", () => {
   self.skipWaiting();
