@@ -9,7 +9,7 @@ import { garantirOcorrenciasDoMes } from "@/lib/contas-fixas/garantir";
 import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/calendar-date";
 import { dataParaCalculo } from "@/lib/domain/data-fallback";
 import { cicloDoCartao, fechamentoDaFatura, mesDaFatura, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
-import { faturaAtualCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
+import { faturaAtualCents, faturaTotaisCents, limiteComprometidoCents, limiteDisponivelCents } from "@/lib/domain/fatura";
 import { labelMes } from "@/lib/format/meses";
 import { tituloFatura } from "@/lib/format/fatura";
 import { CartoesList, type CartaoView } from "./cartoes-list";
@@ -119,7 +119,10 @@ export default async function CartoesPage({
       doMes: {
         titulo: tituloFatura(mesReferencia, ciclo),
         vencimentoLabel: `fecha ${dd(fechaDoMes.day)}/${dd(fechaDoMes.month)} · vence ${dd(vencDoMes.day)}/${dd(vencDoMes.month)}`,
-        totalCents: faturaAtualCents(cartao.id, saidasCartao, mesReferencia, ciclo),
+        // Em aberto: destaque SEM anuidade (o banco só a lança na véspera do
+        // fechamento); o total com anuidade vai como linha secundária.
+        totalCents: faturaTotaisCents(cartao.id, saidasCartao, mesReferencia, ciclo).semAnuidade,
+        anuidadeCents: faturaTotaisCents(cartao.id, saidasCartao, mesReferencia, ciclo).anuidade,
         compras: comprasDoMes,
         ...fixas(comprasDoMes),
       },

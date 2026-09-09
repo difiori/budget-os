@@ -109,21 +109,45 @@ describe("limiteComprometidoCents", () => {
     expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(2000);
   });
 
-  it("recorrente da fatura a vencer (mês anterior) conta; da fatura do mês, não", () => {
+  it("recorrente (conta fixa) pesa tanto na fatura a vencer quanto na do mês", () => {
     const saidas = [
-      saidaComStatus({ total_cents: 3000, data: "2026-06-10", origem: "Recorrente" }), // a vencer — pesa (anuidade a pagar)
-      saidaComStatus({ total_cents: 5000, data: "2026-07-10", origem: "Recorrente" }), // do mês — não pesa ainda
+      saidaComStatus({ total_cents: 3000, data: "2026-06-10", origem: "Recorrente" }), // a vencer
+      saidaComStatus({ total_cents: 5000, data: "2026-07-10", origem: "Recorrente" }), // do mês — já caiu no cartão
+    ];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(8000);
+  });
+
+  it("na fatura do mês conta avulsa, parcela e conta fixa", () => {
+    const saidas = [
+      saidaComStatus({ total_cents: 3000, data: "2026-07-10", origem: "Manual" }),
+      saidaComStatus({ total_cents: 1000, data: "2026-07-15", origem: "Parcelamento" }),
+      saidaComStatus({ total_cents: 5000, data: "2026-07-20", origem: "Recorrente" }),
+    ];
+    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(9000);
+  });
+
+  it("anuidade nunca pesa no limite, em nenhuma janela", () => {
+    const saidas = [
+      { ...saidaComStatus({ total_cents: 9800, data: "2026-06-10", origem: "Recorrente" }), nome: "Anuidade" }, // a vencer
+      { ...saidaComStatus({ total_cents: 9800, data: "2026-07-10", origem: "Recorrente" }), nome: "Anuidade" }, // do mês
+      { ...saidaComStatus({ total_cents: 3000, data: "2026-07-12", origem: "Manual" }), nome: "Amazon" },
     ];
     expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(3000);
   });
+});
 
-  it("na fatura do mês conta avulsa e parcela, mas não recorrente", () => {
+describe("faturaTotaisCents / isAnuidade", () => {
+  it("separa a anuidade do resto da fatura", async () => {
+    const { faturaTotaisCents, isAnuidade } = await import("./fatura");
     const saidas = [
-      saidaComStatus({ total_cents: 3000, data: "2026-07-10", origem: "Manual" }), // do mês, avulsa — pesa
-      saidaComStatus({ total_cents: 1000, data: "2026-07-15", origem: "Parcelamento" }), // do mês, parcela — pesa
-      saidaComStatus({ total_cents: 5000, data: "2026-07-20", origem: "Recorrente" }), // do mês, recorrente — não
+      { ...saidaComStatus({ total_cents: 9800, data: "2026-07-10", origem: "Recorrente" }), nome: "Anuidade" },
+      { ...saidaComStatus({ total_cents: 3000, data: "2026-07-12", origem: "Manual" }), nome: "Amazon" },
+      { ...saidaComStatus({ total_cents: 700, data: "2026-07-12", origem: "Manual" }), nome: "Seguro" },
     ];
-    expect(limiteComprometidoCents(CARBON_BLACK, saidas, mesReferencia)).toBe(4000);
+    expect(faturaTotaisCents(CARBON_BLACK, saidas, mesReferencia)).toEqual({ total: 13500, anuidade: 9800, semAnuidade: 3700 });
+    expect(isAnuidade({ nome: "Anuidade" })).toBe(true);
+    expect(isAnuidade({ nome: "Anuidade Diferenciada" })).toBe(true);
+    expect(isAnuidade({ nome: "Seguro" })).toBe(false);
   });
 });
 

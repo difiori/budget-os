@@ -18,7 +18,8 @@ import { addMonths, hoje, isSameMonth, type CalendarDate } from "@/lib/domain/ca
 import { gastosDoMesCents, projecaoSaldoMeses, resolverContaEfetivaDaSaida, resumoContaMes } from "@/lib/domain/mes";
 import { entradasPorMes, gastosPorMes, ultimosMeses } from "@/lib/domain/tendencia";
 import { gastosPorCategoria } from "@/lib/domain/categoria-totais";
-import { faturaAtualCents } from "@/lib/domain/fatura";
+import { formatCentsToBRL } from "@/lib/domain/money";
+import { faturaTotaisCents } from "@/lib/domain/fatura";
 import { cicloDoCartao, vencimentoDaFatura } from "@/lib/domain/ciclo-cartao";
 import { resumirLancamentos, saidasDoMesPorData } from "@/lib/domain/feed-saidas";
 import { ocorrenciasVirtuais } from "@/lib/domain/conta-fixa";
@@ -273,13 +274,16 @@ export default async function DashboardPage({
       return {
         id: c.id,
         nome: c.nome,
-        totalCents: faturaAtualCents(c.id, todasSaidas, mesReferencia, ciclo),
+        // Fatura em aberto: sem anuidade em destaque, como na tela Cartões.
+        totalCents: faturaTotaisCents(c.id, todasSaidas, mesReferencia, ciclo).semAnuidade,
+        anuidadeCents: faturaTotaisCents(c.id, todasSaidas, mesReferencia, ciclo).anuidade,
         vence: `${dd(venc.day)}/${dd(venc.month)}`,
       };
     })
-    .filter((f) => f.totalCents !== 0)
+    .filter((f) => f.totalCents !== 0 || f.anuidadeCents !== 0)
     .sort((a, b) => b.totalCents - a.totalCents);
   const totalFaturas = faturasDoMes.reduce((sum, f) => sum + f.totalCents, 0);
+  const totalAnuidades = faturasDoMes.reduce((sum, f) => sum + f.anuidadeCents, 0);
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-8 lg:px-10">
@@ -369,13 +373,14 @@ export default async function DashboardPage({
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="truncate text-[0.875rem] text-ink-2">{f.nome}</span>
                       <span className="type-caption shrink-0 text-ink-3">vence {f.vence}</span>
+                      {f.anuidadeCents > 0 && <span className="type-caption shrink-0 text-ink-3">· + anuidade {formatCentsToBRL(f.anuidadeCents)}</span>}
                     </span>
                     <Amount cents={f.totalCents} semantic="none" className="text-[0.875rem] font-medium text-ink" />
                   </li>
                 ))}
                 {faturasDoMes.length > 1 && (
                   <li className="flex items-baseline justify-between gap-3 border-t border-hairline pt-2">
-                    <span className="type-caption text-ink-3">Total das faturas</span>
+                    <span className="type-caption text-ink-3">Total das faturas{totalAnuidades > 0 ? " · sem anuidade" : ""}</span>
                     <Amount cents={totalFaturas} semantic="none" className="text-[0.875rem] font-medium text-ink" />
                   </li>
                 )}

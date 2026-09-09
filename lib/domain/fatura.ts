@@ -3,6 +3,31 @@ import { CICLO_PADRAO, mesDaFatura, type CicloCartao } from "./ciclo-cartao";
 import { dataParaCalculo } from "./data-fallback";
 import type { SaidaOrigem, SaidaParaCalculo, SaidaStatus } from "./types";
 
+/**
+ * Anuidade do cartão: única cobrança que NUNCA pesa no limite disponível e
+ * que o banco só lança na fatura um dia antes do fechamento — por isso a
+ * fatura do mês em aberto é mostrada sem ela, e "com anuidade" à parte.
+ * Identificada pelo nome (contrato "Anuidade" e suas ocorrências).
+ */
+export function isAnuidade(s: { nome?: string | null }): boolean {
+  return /\banuidade\b/i.test(s.nome ?? "");
+}
+
+/** Total da fatura de um mês, separando a anuidade (regras 1-2 + isAnuidade). */
+export function faturaTotaisCents(
+  cartaoId: string,
+  saidas: (SaidaParaCalculo & { nome?: string | null })[],
+  mesReferencia: CalendarDate,
+  ciclo: CicloCartao = CICLO_PADRAO
+): { total: number; anuidade: number; semAnuidade: number } {
+  const daFatura = saidas
+    .filter((s) => s.cartao_id === cartaoId)
+    .filter((s) => isSameMonth(mesDaFatura(dataParaCalculo(s), ciclo), mesReferencia));
+  const total = daFatura.reduce((sum, s) => sum + s.total_cents, 0);
+  const anuidade = daFatura.filter(isAnuidade).reduce((sum, s) => sum + s.total_cents, 0);
+  return { total, anuidade, semAnuidade: total - anuidade };
+}
+
 /** Índice contínuo de mês (ano*12 + mês) — pra comparar meses por ordem. */
 function indiceMes(d: CalendarDate): number {
   return d.year * 12 + (d.month - 1);
@@ -33,19 +58,18 @@ export function faturaAtualCents(
  * - **Sem passado**: ignora compras anteriores à fatura a vencer (mês anterior
  *   ao de referência). Lançamento vencido nunca quitado é dado antigo, não
  *   limite em uso.
- * - **Fatura a vencer (mês anterior)**: conta tudo, inclusive recorrentes
- *   (anuidade, assinatura). É a fatura fechada que vence agora — dívida real
- *   enquanto o botão "marcar como paga" não é pressionado.
- * - **Fatura do mês (atual)**: conta avulsas e parcelamentos, mas **não** as
- *   recorrentes — elas ainda não caíram no cartão, então reservá-las agora
- *   inflaria o "excedido" antes da hora. Passam a pesar quando este mês vira o
- *   "a vencer" (mês seguinte) ou quando a fatura é paga (aí são debitadas).
+ * - **Fatura a vencer (mês anterior)**: conta tudo. É a fatura fechada que
+ *   vence agora — dívida real enquanto não for marcada como paga.
+ * - **Fatura do mês (atual)**: conta tudo que já caiu no cartão, inclusive as
+ *   contas fixas (assinaturas) — o banco já as debita do limite assim que
+ *   lança (conferido com o app do banco em 09/09/2026).
  * - **No futuro, só parcela**: dos meses à frente, apenas compras parceladas
  *   (`Parcelamento`) pesam — é a única dívida já assumida.
+ * - **Anuidade nunca pesa**, em nenhuma janela (ver isAnuidade).
  */
 export function limiteComprometidoCents(
   cartaoId: string,
-  saidas: (SaidaParaCalculo & { status: SaidaStatus; origem: SaidaOrigem })[],
+  saidas: (SaidaParaCalculo & { status: SaidaStatus; origem: SaidaOrigem; nome?: string | null })[],
   mesReferencia: CalendarDate,
   ciclo: CicloCartao = CICLO_PADRAO
 ): number {
@@ -55,12 +79,12 @@ export function limiteComprometidoCents(
   return saidas
     .filter((s) => s.cartao_id === cartaoId)
     .filter((s) => s.status !== "Pago")
+    .filter((s) => !isAnuidade(s))
     .filter((s) => {
       const ref = indiceMes(mesDaFatura(dataParaCalculo(s), ciclo));
       if (ref < inicioCiclo) return false; // sem passado
       if (ref > fimCicloAtual) return s.origem === "Parcelamento"; // futuro: só parcela
-      if (ref === fimCicloAtual) return s.origem !== "Recorrente"; // do mês: avulsa + parcela (recorrente não)
-      return true; // a vencer (mês anterior): tudo, inclusive recorrente
+      return true; // a vencer e do mês: tudo que já está no cartão
     })
     .reduce((sum, s) => sum + s.total_cents, 0);
 }

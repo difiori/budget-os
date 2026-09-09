@@ -23,6 +23,8 @@ interface FaturaView {
   /** Quantas compras vêm de contas fixas (assinaturas) e quanto somam. */
   fixasCount: number;
   fixasCents: number;
+  /** Fatura em aberto: anuidade separada do total em destaque (0 nas demais). */
+  anuidadeCents?: number;
 }
 
 function ResumoFixas({ fatura }: { fatura: FaturaView }) {
@@ -230,7 +232,14 @@ function CartaoCard({ view, categorias, iaDisponivel }: { view: CartaoView; cate
             <p className="type-caption text-ink-3">do mês · {doMes.vencimentoLabel}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Amount cents={doMes.totalCents} semantic="none" className="type-title text-ink" />
+            <div className="flex flex-col items-end">
+              <Amount cents={doMes.totalCents} semantic="none" className="type-title text-ink" />
+              {(doMes.anuidadeCents ?? 0) > 0 && (
+                <span className="type-caption figures text-ink-3">
+                  com anuidade {formatCentsToBRL(doMes.totalCents + (doMes.anuidadeCents ?? 0))}
+                </span>
+              )}
+            </div>
             {doMes.compras.length > 0 && (
               <ChevronDown size={15} className={`text-ink-3 transition-transform ${abertoDoMes ? "rotate-180" : ""}`} />
             )}
