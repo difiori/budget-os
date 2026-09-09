@@ -25,6 +25,7 @@ function svgIcone(tema: Tema, opts: { arredondado?: boolean; mono?: boolean } = 
   const c = CORES[tema];
   const rx = opts.arredondado === false ? 0 : 230;
   const clip = `<clipPath id="q"><rect width="1024" height="1024" rx="${rx}"/></clipPath>`;
+  const transform = "";
   if (opts.mono) {
     // Silhueta para "ícones temáticos" do Android: o sistema pinta.
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><circle cx="358" cy="512" r="166" fill="#fff"/><circle cx="666" cy="512" r="166" fill="#fff"/></svg>`;
@@ -38,7 +39,7 @@ function svgIcone(tema: Tema, opts: { arredondado?: boolean; mono?: boolean } = 
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${c.gloss}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
     <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="${tema === "dark" ? 0.35 : 0.06}"/></linearGradient>
   </defs>
-  <g clip-path="url(#q)">
+  <g clip-path="url(#q)"${transform}>
     <rect width="1024" height="1024" fill="url(#bg)"/>
     <!-- reflexo de vidro: metade de cima, com a borda inferior levemente curva -->
     <path d="M0 0H1024V400Q512 520 0 400Z" fill="url(#gloss)"/>
@@ -59,11 +60,15 @@ async function png(svg: string, size: number, arquivo: string) {
 }
 
 async function main() {
-  // Tela de início (iOS) e manifesto: escuro, quadrado cheio — o sistema arredonda.
-  await png(svgIcone("dark", { arredondado: false }), 1024, "app-icon.png");
-  await png(svgIcone("dark", { arredondado: false }), 180, "apple-icon.png");
-  await png(svgIcone("dark", { arredondado: false }), 512, "icon-512.png");
-  await png(svgIcone("dark", { arredondado: false }), 192, "icon-192.png");
+  // Tela de início (iOS/Dock) e manifesto: variante CLARA em quadrado cheio.
+  // O sistema (iOS 18+, macOS 26) recorta, aplica o estilo do ícone e, no
+  // modo escuro, escurece sozinho o fundo de ícones sem variante própria —
+  // conferido no Dock do Diego com o app web do YouTube em 09/09. Um ícone
+  // personalizado de Finder passa por fora desse pipeline; não usar.
+  await png(svgIcone("light", { arredondado: false }), 1024, "app-icon.png");
+  await png(svgIcone("light", { arredondado: false }), 180, "apple-icon.png");
+  await png(svgIcone("light", { arredondado: false }), 512, "icon-512.png");
+  await png(svgIcone("light", { arredondado: false }), 192, "icon-192.png");
   await png(svgIcone("dark", { mono: true }), 512, "icon-mono-512.png");
   // Favicons da aba, arredondados: o layout troca entre eles pelo tema do app.
   await png(svgIcone("light"), 96, "favicon-light.png");

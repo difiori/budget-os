@@ -30,7 +30,11 @@ export const metadata: Metadata = {
     // arredonda. Gerados por scripts/gerar-icones.ts.
     icon: { url: "/favicon-dark.png", sizes: "96x96", type: "image/png" },
     shortcut: "/favicon-dark.png",
-    apple: "/apple-icon.png",
+    // 180 para o iPhone; 1024 para o Dock do Mac ficar nítido em Retina.
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/app-icon.png", sizes: "1024x1024", type: "image/png" },
+    ],
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
   // tela de início. `black-translucent`: o app é imersivo e o fundo (charcoal
