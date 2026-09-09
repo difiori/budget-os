@@ -17,6 +17,12 @@ const CORES = {
   dark: { bgTop: "#2a2f37", bgBot: "#0f1216", borda: "rgba(255,255,255,0.28)", sombraBorda: "rgba(0,0,0,0.5)", gloss: 0.2, diego: "#3aa7ff", vitor: "#ff8a3d", fundoPlano: "#16191e" },
 } as const;
 
+/** Ícone chapado para o sistema compor: fundo branco uniforme + as duas bolinhas. */
+function svgChapado(): string {
+  const c = CORES.light;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#ffffff"/><circle cx="358" cy="512" r="166" fill="${c.diego}"/><circle cx="666" cy="512" r="166" fill="${c.vitor}"/></svg>`;
+}
+
 /**
  * Desenho em 1024×1024. `arredondado=false` entrega o quadrado inteiro (iOS e
  * o maskable do Android aplicam a própria máscara — cantos duplos ficam feios).
@@ -60,15 +66,17 @@ async function png(svg: string, size: number, arquivo: string) {
 }
 
 async function main() {
-  // Tela de início (iOS/Dock) e manifesto: variante CLARA em quadrado cheio.
-  // O sistema (iOS 18+, macOS 26) recorta, aplica o estilo do ícone e, no
-  // modo escuro, escurece sozinho o fundo de ícones sem variante própria —
-  // conferido no Dock do Diego com o app web do YouTube em 09/09. Um ícone
-  // personalizado de Finder passa por fora desse pipeline; não usar.
-  await png(svgIcone("light", { arredondado: false }), 1024, "app-icon.png");
-  await png(svgIcone("light", { arredondado: false }), 180, "apple-icon.png");
-  await png(svgIcone("light", { arredondado: false }), 512, "icon-512.png");
-  await png(svgIcone("light", { arredondado: false }), 192, "icon-192.png");
+  // Tela de início (iOS/Dock) e manifesto: ícone CHAPADO, fundo branco
+  // uniforme, quadrado cheio. O sistema (iOS 18+, macOS 26) recorta, aplica o
+  // vidro do estilo atual e, no modo escuro, escurece sozinho o fundo — mas só
+  // quando o fundo é uniforme: o app web do YouTube (fundo branco chapado)
+  // escurece no Dock do Diego; a nossa versão com gradiente, reflexo e borda
+  // ficou clara (09/09). Um ícone personalizado de Finder passa por fora
+  // desse pipeline; não usar. O vidro fica só nos favicons, onde é nosso.
+  await png(svgChapado(), 1024, "app-icon.png");
+  await png(svgChapado(), 180, "apple-icon.png");
+  await png(svgChapado(), 512, "icon-512.png");
+  await png(svgChapado(), 192, "icon-192.png");
   await png(svgIcone("dark", { mono: true }), 512, "icon-mono-512.png");
   // Favicons da aba, arredondados: o layout troca entre eles pelo tema do app.
   await png(svgIcone("light"), 96, "favicon-light.png");
