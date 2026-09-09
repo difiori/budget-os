@@ -23,11 +23,16 @@ export const metadata: Metadata = {
   description: "Gestão financeira do casal — Diego & Vitor",
   applicationName: "Budget OS",
   icons: {
-    // Favicon simples (aba do navegador); o ícone rico fica pro apple-touch
-    // (tela de início) e pro manifest (PWA).
-    icon: "/favicon.png",
+    // Aba do navegador: SVG que troca claro/escuro pelo sistema (Chrome, Edge,
+    // Firefox); PNG de fallback para quem não lê SVG. Tela de início (iOS) e
+    // manifesto usam o PNG escuro em quadrado cheio — o sistema arredonda.
+    // Gerados por scripts/gerar-icones.ts.
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.png", sizes: "96x96", type: "image/png" },
+    ],
     shortcut: "/favicon.png",
-    apple: "/app-icon4.png",
+    apple: "/apple-icon.png",
   },
   // Faz o iOS abrir em tela cheia (sem barra do Safari) quando instalado na
   // tela de início. `black-translucent`: o app é imersivo e o fundo (charcoal
